@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#efefed" />
+    <title>LUMIWARD — Interactive Game Package</title>
+    <meta name="description" content="A clear plastic game case built entirely from Three.js geometry. Turn it, open it, and take out the cartridge." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Inter:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main class="app" id="app">
+      <div class="stage" id="stage">
+        <canvas class="gl" id="gl" aria-label="Interactive 3D game case"></canvas>
+      </div>
+
+      <header class="corner">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span>Lumen Works</div>
+        <div class="tag">Premium Interactive Game Packaging</div>
+      </header>
+
+      <p class="hint" id="hint" aria-live="polite">Drag to turn · Tap the case to open</p>
+
+      <nav class="dock" id="dock" aria-label="Package controls">
+        <button class="tool" id="btn-open" type="button" aria-pressed="false" title="Open / Close (O)" aria-label="Open the case">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+            <path class="ico-lid" d="M10.6 4.5 4 6.6v11.6l6.6 1.3z" />
+            <rect x="10.6" y="4.5" width="9" height="15" rx="1.4" />
+            <rect x="14.2" y="13.2" width="3.4" height="4.4" rx=".6" />
+          </svg>
+        </button>
+        <button class="tool" id="btn-reset" type="button" title="Reset view (R)" aria-label="Reset view">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+            <path d="M4.5 4.5v3.6h3.6" />
+          </svg>
+        </button>
+        <span class="divider" aria-hidden="true"></span>
+        <div class="rail" id="rail" role="group" aria-label="Change artwork"></div>
+        <span class="divider" aria-hidden="true"></span>
+        <div class="pop-anchor">
+          <button class="tool" id="btn-color" type="button" title="Case color" aria-label="Case color" aria-expanded="false">
+            <span class="dot" id="color-dot"></span>
+          </button>
+          <div class="popover" id="color-pop" hidden role="listbox" aria-label="Case colors"></div>
+        </div>
+        <button class="tool" id="btn-edit" type="button" title="Customize & upload (E)" aria-label="Customize package" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15.5V4.5" />
+            <path d="m7.5 9 4.5-4.5L16.5 9" />
+            <path d="M4.5 15v3a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3" />
+          </svg>
+        </button>
+      </nav>
+
+      <section class="panel" id="panel" hidden aria-label="Customize package">
+        <div class="panel-head">
+          <h2>Customize</h2>
+          <button class="close" id="panel-close" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <label class="field"><span>Game title</span><input id="in-title" type="text" maxlength="32" autocomplete="off" spellcheck="false" /></label>
+          <label class="field"><span>Subtitle</span><input id="in-subtitle" type="text" maxlength="48" autocomplete="off" /></label>
+          <label class="field"><span>Spine text</span><input id="in-spine" type="text" maxlength="32" autocomplete="off" spellcheck="false" /></label>
+          <label class="check"><input id="in-showtitle" type="checkbox" checked /><span>Print title on the artwork</span></label>
+
+          <div class="uploads">
+            <label class="upload" data-slot="front">
+              <input type="file" accept="image/png,image/jpeg,image/webp" />
+              <span class="thumb"></span><span class="cap">Front</span>
+            </label>
+            <label class="upload" data-slot="back">
+              <input type="file" accept="image/png,image/jpeg,image/webp" />
+              <span class="thumb"></span><span class="cap">Back</span>
+            </label>
+            <label class="upload" data-slot="label">
+              <input type="file" accept="image/png,image/jpeg,image/webp" />
+              <span class="thumb"></span><span class="cap">Cartridge</span>
+            </label>
+          </div>
+          <p class="note">PNG / JPEG / WebP. Images are applied live as textures — nothing leaves your browser.</p>
+
+          <div class="field"><span>Case color</span><div class="swatches" id="panel-swatches"></div></div>
+          <button class="ghost" id="btn-restore" type="button">Restore preset artwork</button>
+        </div>
+      </section>
+
+      <div class="loader" id="loader" aria-hidden="true"><span></span></div>
+      <p class="fail" id="fail" hidden>WebGL is not available on this device.</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
