@@ -1,51 +1,43 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { prefersReducedMotion } from '../config';
 import type { GameCase } from '../model/GameCase';
 import type { Cartridge } from '../model/Cartridge';
 import type { SceneManager } from '../scene/SceneManager';
 
 export type ViewState = 'closed' | 'open' | 'inspecting';
+const REST = { x: 0.055, y: 0.48 };
+const TILT_LIMIT = Math.PI / 2.8;
 
 export class InteractionManager {
-  private isPointerDown = false;
-  private pointerStartX = 0;
-  private pointerStartY = 0;
+  private pointerId: number | null = null;
+  private pointerStart = new THREE.Vector2();
+  private lastPointer = new THREE.Vector2();
   private pointerMoved = false;
-  private lastPointerX = 0;
-  private lastPointerY = 0;
-
-  // Case Orbit Rotation (Spherical coordinates / Euler)
-  private rotY = -0.15;
-  private rotX = 0.08;
-  private targetRotY = -0.15;
-  private targetRotX = 0.08;
+  private lastMoveTime = 0;
+  private rotY = REST.y;
+  private rotX = REST.x;
+  private targetRotY = REST.y;
+  private targetRotX = REST.x;
   private velY = 0;
   private velX = 0;
-
-  // Cartridge Inspection Flip Rotation
   private cartRotY = 0;
   private cartRotX = 0;
   private targetCartRotY = 0;
   private targetCartRotX = 0;
-
-  // Animation states
   private caseOpenTween?: gsap.core.Tween;
   private cartExtractTween?: gsap.core.Tween;
-  private resetTween?: gsap.core.Timeline;
-
-  /** 0 = docked in holder, 1 = floating in inspection pose */
+  private resetTween?: gsap.core.Tween;
   private inspectProgress = 0;
   private isInspecting = false;
-
+  private targetOpen = false;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
-
-  // Temporary vectors for matrix calculations
-  private readonly tempPos = new THREE.Vector3();
-  private readonly tempQuat = new THREE.Quaternion();
-  private readonly inspectTargetPos = new THREE.Vector3(0, 0, 16);
-  private readonly inspectTargetQuat = new THREE.Quaternion();
-
+  private readonly dockPos = new THREE.Vector3();
+  private readonly dockQuat = new THREE.Quaternion();
+  private readonly liftPos = new THREE.Vector3();
+  private readonly inspectPos = new THREE.Vector3();
+  private readonly inspectQuat = new THREE.Quaternion();
   onStateChange?: (state: ViewState) => void;
 
   constructor(
@@ -53,310 +45,191 @@ export class InteractionManager {
     private readonly gameCase: GameCase,
     private readonly cartridge: Cartridge,
   ) {
-    // Add cartridge directly to scene root so it can seamlessly travel between docked & inspection space
-    this.sm.scene.add(this.cartridge.root);
-
-    // Initial default rotation
-    this.gameCase.root.rotation.set(this.rotX, this.rotY, 0);
-
+    sm.scene.add(cartridge.root);
+    gameCase.root.rotation.set(this.rotX, this.rotY, 0);
     this.bindEvents();
   }
 
   get currentState(): ViewState {
-    if (this.isInspecting) return 'inspecting';
-    return this.gameCase.open > 0.5 ? 'open' : 'closed';
+    return this.isInspecting ? 'inspecting' : this.targetOpen ? 'open' : 'closed';
+  }
+
+  get canInspect() {
+    return this.targetOpen && this.gameCase.open > 0.92;
+  }
+
+  private duration(seconds: number) {
+    return prefersReducedMotion() ? 0 : seconds;
   }
 
   private bindEvents() {
     const el = this.sm.canvas;
-
-    el.addEventListener('pointerdown', this.onPointerDown.bind(this));
-    window.addEventListener('pointermove', this.onPointerMove.bind(this));
-    window.addEventListener('pointerup', this.onPointerUp.bind(this));
-    window.addEventListener('pointercancel', this.onPointerUp.bind(this));
-
-    // Keyboard shortcuts
+    el.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || e.button !== 0 || this.pointerId !== null) return;
+      this.pointerId = e.pointerId;
+      el.setPointerCapture(e.pointerId);
+      this.pointerMoved = false;
+      this.pointerStart.set(e.clientX, e.clientY);
+      this.lastPointer.copy(this.pointerStart);
+      this.lastMoveTime = e.timeStamp;
+      this.velX = this.velY = 0;
+      this.resetTween?.kill();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== this.pointerId) return;
+      const dx = e.clientX - this.lastPointer.x;
+      const dy = e.clientY - this.lastPointer.y;
+      const dt = Math.max(8, e.timeStamp - this.lastMoveTime) / 1000;
+      this.pointerMoved ||= Math.hypot(e.clientX - this.pointerStart.x, e.clientY - this.pointerStart.y) > 6;
+      this.lastPointer.set(e.clientX, e.clientY);
+      this.lastMoveTime = e.timeStamp;
+      if (!this.pointerMoved) return;
+      if (this.isInspecting) {
+        this.targetCartRotY += dx * 0.012;
+        this.targetCartRotX = THREE.MathUtils.clamp(this.targetCartRotX + dy * 0.012, -1.3, 1.3);
+      } else {
+        this.targetRotY += dx * 0.007;
+        this.targetRotX = THREE.MathUtils.clamp(this.targetRotX + dy * 0.007, -TILT_LIMIT, TILT_LIMIT);
+        this.velY = THREE.MathUtils.clamp(dx * 0.007 / dt, -4, 4);
+        this.velX = THREE.MathUtils.clamp(dy * 0.007 / dt, -3, 3);
+      }
+    });
+    const release = (e: PointerEvent, cancelled: boolean) => {
+      if (e.pointerId !== this.pointerId) return;
+      this.pointerId = null;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      if (cancelled || e.timeStamp - this.lastMoveTime > 90) this.velX = this.velY = 0;
+      if (!cancelled && !this.pointerMoved) this.handleClick(e.clientX, e.clientY);
+    };
+    el.addEventListener('pointerup', (e) => release(e, false));
+    el.addEventListener('pointercancel', (e) => release(e, true));
+    el.addEventListener('lostpointercapture', (e) => release(e, true));
     window.addEventListener('keydown', (e) => {
-      const activeEl = document.activeElement;
-      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-        return;
-      }
-      if (e.key === 'o' || e.key === 'O') {
-        this.toggleOpen();
-      } else if (e.key === 'r' || e.key === 'R') {
-        this.resetView();
-      } else if (e.key === 'c' || e.key === 'C') {
-        if (this.gameCase.open > 0.4) {
-          this.toggleInspectCartridge();
-        }
-      }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if ((e.target as HTMLElement)?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (e.key.toLowerCase() === 'o') this.toggleOpen();
+      if (e.key.toLowerCase() === 'r') this.resetView();
+      if (e.key.toLowerCase() === 'c') this.toggleInspectCartridge();
+      if (e.key === 'Escape' && this.isInspecting) this.dockCartridge();
     });
   }
 
-  private onPointerDown(e: PointerEvent) {
-    this.isPointerDown = true;
-    this.pointerMoved = false;
-    this.pointerStartX = e.clientX;
-    this.pointerStartY = e.clientY;
-    this.lastPointerX = e.clientX;
-    this.lastPointerY = e.clientY;
-    this.velX = 0;
-    this.velY = 0;
-  }
-
-  private onPointerMove(e: PointerEvent) {
-    if (!this.isPointerDown) return;
-
-    const dx = e.clientX - this.lastPointerX;
-    const dy = e.clientY - this.lastPointerY;
-
-    if (Math.abs(e.clientX - this.pointerStartX) > 5 || Math.abs(e.clientY - this.pointerStartY) > 5) {
-      this.pointerMoved = true;
-    }
-
-    this.lastPointerX = e.clientX;
-    this.lastPointerY = e.clientY;
-
-    if (this.isInspecting) {
-      // Rotating the inspected cartridge
-      this.targetCartRotY += dx * 0.015;
-      this.targetCartRotX += dy * 0.015;
-      this.targetCartRotX = THREE.MathUtils.clamp(this.targetCartRotX, -Math.PI / 2.5, Math.PI / 2.5);
-    } else {
-      // Orbiting the entire case
-      this.velY = dx * 0.007;
-      this.velX = dy * 0.007;
-      this.targetRotY += this.velY;
-      this.targetRotX += this.velX;
-
-      // Vertical tilt limits
-      this.targetRotX = THREE.MathUtils.clamp(this.targetRotX, -Math.PI / 2.8, Math.PI / 2.8);
-    }
-  }
-
-  private onPointerUp(e: PointerEvent) {
-    if (!this.isPointerDown) return;
-    this.isPointerDown = false;
-
-    // Check if this was a tap/click rather than a drag
-    if (!this.pointerMoved) {
-      this.handleClick(e.clientX, e.clientY);
-    }
-  }
-
-  private handleClick(clientX: number, clientY: number) {
+  private handleClick(x: number, y: number) {
     const rect = this.sm.canvas.getBoundingClientRect();
-    this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
+    this.pointer.set((x - rect.left) / rect.width * 2 - 1, -(y - rect.top) / rect.height * 2 + 1);
     this.raycaster.setFromCamera(this.pointer, this.sm.camera);
-
-    // Check cartridge hit first
-    const cartHits = this.raycaster.intersectObject(this.cartridge.root, true);
-    if (cartHits.length > 0) {
-      if (this.isInspecting) {
-        this.toggleInspectCartridge();
-        return;
-      } else if (this.gameCase.open > 0.3) {
-        this.toggleInspectCartridge();
-        return;
-      }
+    if (this.isInspecting) {
+      this.dockCartridge();
+      return;
     }
-
-    // Check case hit
-    const caseHits = this.raycaster.intersectObject(this.gameCase.root, true);
-    if (caseHits.length > 0) {
-      if (this.isInspecting) {
-        this.toggleInspectCartridge();
-      } else {
-        this.toggleOpen();
-      }
-    } else if (this.isInspecting) {
-      // Clicked outside while inspecting -> dock back
+    // Sort both models together: never select a card through an opaque jacket.
+    const hits = this.raycaster.intersectObjects([this.cartridge.root, this.gameCase.root], true);
+    const hit = hits.find(({ object }) => {
+      const material = (object as THREE.Mesh).material;
+      return !(material instanceof THREE.MeshPhysicalMaterial && material.transmission > 0.5);
+    }) ?? hits[0];
+    if (!hit) return;
+    if (hit.object.userData.part === 'cartridge' && this.targetOpen && this.gameCase.open > 0.92) {
       this.toggleInspectCartridge();
-    }
+    } else this.toggleOpen();
   }
 
   toggleOpen() {
-    if (this.isInspecting) {
-      this.dockCartridge(() => this.toggleOpen());
-      return;
-    }
-
-    const target = this.gameCase.open > 0.5 ? 0 : 1;
-    this.caseOpenTween?.kill();
-
-    const currentOpen = { val: this.gameCase.open };
-    const isOpening = target === 1;
-
-    this.caseOpenTween = gsap.to(currentOpen, {
-      val: target,
-      duration: isOpening ? 1.15 : 0.95,
-      ease: isOpening ? 'power2.out' : 'power2.inOut',
-      onUpdate: () => {
-        this.gameCase.open = currentOpen.val;
-        this.gameCase.update();
-      },
-      onComplete: () => {
-        this.onStateChange?.(this.currentState);
-      },
-    });
-
-    this.onStateChange?.(isOpening ? 'open' : 'closed');
+    this.setOpen(!this.targetOpen);
   }
 
   setOpen(open: boolean) {
-    if ((this.gameCase.open > 0.5) === open) return;
-    this.toggleOpen();
+    this.targetOpen = open;
+    this.caseOpenTween?.kill();
+    if (!open && (this.isInspecting || this.inspectProgress > 0)) this.dockCartridge();
+    else this.animateLid();
+    this.onStateChange?.(this.currentState);
+  }
+
+  private animateLid() {
+    this.caseOpenTween?.kill();
+    this.caseOpenTween = gsap.to(this.gameCase, {
+      open: this.targetOpen ? 1 : 0,
+      duration: this.duration((this.targetOpen ? 1.1 : 0.9) * Math.abs(Number(this.targetOpen) - this.gameCase.open)),
+      ease: 'power2.inOut',
+      onUpdate: () => this.gameCase.update(),
+      onComplete: () => this.onStateChange?.(this.currentState),
+    });
   }
 
   toggleInspectCartridge() {
-    if (this.isInspecting) {
-      this.dockCartridge();
-    } else {
-      this.extractCartridge();
+    if (this.isInspecting) this.dockCartridge();
+    else if (this.targetOpen && this.gameCase.open > 0.92) {
+      this.isInspecting = true;
+      this.velX = this.velY = 0;
+      this.cartExtractTween?.kill();
+      this.cartExtractTween = gsap.to(this, {
+        inspectProgress: 1,
+        duration: this.duration(0.95),
+        ease: 'power2.inOut',
+      });
+      this.onStateChange?.(this.currentState);
     }
   }
 
-  private extractCartridge() {
-    this.isInspecting = true;
-    this.cartExtractTween?.kill();
-
-    // Flex holder tabs outward
-    gsap.fromTo(
-      { flex: 0 },
-      { flex: 1 },
-      {
-        duration: 0.25,
-        yoyo: true,
-        repeat: 1,
-        ease: 'power2.out',
-        onUpdate: function () {
-          // @ts-expect-error GSAP target
-          this.gameCase?.setTabFlex(this.targets()[0].flex);
-        }.bind(this),
-      },
-    );
-
-    const prog = { t: this.inspectProgress };
-    this.cartExtractTween = gsap.to(prog, {
-      t: 1,
-      duration: 0.9,
-      ease: 'power3.out',
-      onUpdate: () => {
-        this.inspectProgress = prog.t;
-      },
-      onComplete: () => {
-        this.onStateChange?.(this.currentState);
-      },
-    });
-
-    this.onStateChange?.('inspecting');
-  }
-
-  private dockCartridge(onComplete?: () => void) {
+  private dockCartridge() {
     this.isInspecting = false;
     this.cartExtractTween?.kill();
-
-    const prog = { t: this.inspectProgress };
-    this.cartExtractTween = gsap.to(prog, {
-      t: 0,
-      duration: 0.75,
+    this.cartExtractTween = gsap.to(this, {
+      inspectProgress: 0,
+      duration: this.duration(0.8),
       ease: 'power2.inOut',
-      onUpdate: () => {
-        this.inspectProgress = prog.t;
-      },
       onComplete: () => {
-        // Tab snap flex effect when docking back
-        gsap.fromTo(
-          { flex: 0 },
-          { flex: 0.6 },
-          {
-            duration: 0.18,
-            yoyo: true,
-            repeat: 1,
-            ease: 'power2.out',
-            onUpdate: function () {
-              // @ts-expect-error GSAP target
-              this.gameCase?.setTabFlex(this.targets()[0].flex);
-            }.bind(this),
-          },
-        );
-        this.targetCartRotX = 0;
-        this.targetCartRotY = 0;
-        this.onStateChange?.(this.currentState);
-        onComplete?.();
+        this.cartRotX = this.cartRotY = this.targetCartRotX = this.targetCartRotY = 0;
+        if (!this.targetOpen) this.animateLid();
       },
     });
-
-    this.onStateChange?.(this.gameCase.open > 0.5 ? 'open' : 'closed');
+    this.onStateChange?.(this.currentState);
   }
 
   resetView() {
+    this.velX = this.velY = 0;
+    if (this.isInspecting) this.dockCartridge();
     this.resetTween?.kill();
-    this.resetTween = gsap.timeline();
-
-    if (this.isInspecting) {
-      this.dockCartridge();
-    }
-
-    this.resetTween.to(this, {
-      targetRotY: -0.15,
-      targetRotX: 0.08,
-      velX: 0,
-      velY: 0,
-      duration: 0.85,
-      ease: 'power2.out',
+    // Choose the closest equivalent angle instead of rewinding multiple turns.
+    this.targetRotY = this.rotY = THREE.MathUtils.euclideanModulo(this.rotY + Math.PI, Math.PI * 2) - Math.PI;
+    this.resetTween = gsap.to(this, {
+      targetRotY: REST.y, targetRotX: REST.x,
+      duration: this.duration(0.75), ease: 'power2.out',
     });
   }
 
   update(delta: number) {
-    // 1. Smooth case orbit with inertia damping
-    if (!this.isPointerDown) {
-      this.velX *= 0.92;
-      this.velY *= 0.92;
-      this.targetRotX += this.velX;
-      this.targetRotY += this.velY;
+    const reduced = prefersReducedMotion();
+    if (this.pointerId === null) {
+      const decay = Math.exp(-7 * delta);
+      const travel = reduced ? 0 : (1 - decay) / 7;
+      this.targetRotX += this.velX * travel;
+      this.targetRotY += this.velY * travel;
+      this.velX *= decay;
+      this.velY *= decay;
     }
-
-    const lerpSpeed = Math.min(1, delta * 12);
-    this.rotX = THREE.MathUtils.lerp(this.rotX, this.targetRotX, lerpSpeed);
-    this.rotY = THREE.MathUtils.lerp(this.rotY, this.targetRotY, lerpSpeed);
+    this.targetRotX = THREE.MathUtils.clamp(this.targetRotX, -TILT_LIMIT, TILT_LIMIT);
+    const blend = reduced ? 1 : 1 - Math.exp(-16 * delta);
+    this.rotX = THREE.MathUtils.lerp(this.rotX, this.targetRotX, blend);
+    this.rotY = THREE.MathUtils.lerp(this.rotY, this.targetRotY, blend);
     this.gameCase.root.rotation.set(this.rotX, this.rotY, 0);
+    this.sm.fitPackage(this.gameCase.open, delta);
+    this.cartRotX = THREE.MathUtils.lerp(this.cartRotX, this.targetCartRotX, blend);
+    this.cartRotY = THREE.MathUtils.lerp(this.cartRotY, this.targetCartRotY, blend);
 
-    // 2. Smooth cartridge inspection rotation
-    this.cartRotX = THREE.MathUtils.lerp(this.cartRotX, this.targetCartRotX, lerpSpeed);
-    this.cartRotY = THREE.MathUtils.lerp(this.cartRotY, this.targetCartRotY, lerpSpeed);
-
-    // 3. Cartridge position interpolation (Docked <--> Inspected)
-    this.gameCase.cartridgeAnchor.getWorldPosition(this.tempPos);
-    this.gameCase.cartridgeAnchor.getWorldQuaternion(this.tempQuat);
-
-    if (this.inspectProgress <= 0.001) {
-      // Firmly docked
-      this.cartridge.root.position.copy(this.tempPos);
-      this.cartridge.root.quaternion.copy(this.tempQuat);
-      this.cartridge.spinner.rotation.set(0, 0, 0);
-    } else {
-      // Floating in inspection or transitioning
-      const t = this.inspectProgress;
-      const smoothT = t * t * (3 - 2 * t); // Smoothstep
-
-      // Camera relative inspection spot (centered, floating slightly above ground)
-      this.inspectTargetPos.set(0, 0, 18);
-      this.inspectTargetQuat.set(0, 0, 0, 1);
-
-      this.cartridge.root.position.lerpVectors(this.tempPos, this.inspectTargetPos, smoothT);
-      this.cartridge.root.quaternion.slerpQuaternions(this.tempQuat, this.inspectTargetQuat, smoothT);
-
-      // Add gentle idle floating bob when inspected
-      if (t > 0.8) {
-        const time = performance.now() * 0.002;
-        const bob = Math.sin(time) * 0.15;
-        this.cartridge.root.position.y += bob * (t - 0.8) * 5;
-      }
-
-      this.cartridge.spinner.rotation.set(this.cartRotX * smoothT, this.cartRotY * smoothT, 0);
-    }
+    this.gameCase.cartridgeAnchor.getWorldPosition(this.dockPos);
+    this.gameCase.cartridgeAnchor.getWorldQuaternion(this.dockQuat);
+    const t = this.inspectProgress;
+    // Lift clear of the retaining tabs before moving toward the camera.
+    this.liftPos.set(0, 0, 1.1).applyQuaternion(this.dockQuat).add(this.dockPos);
+    this.inspectPos.set(0, 0.3, -10).applyMatrix4(this.sm.camera.matrixWorld);
+    this.sm.camera.getWorldQuaternion(this.inspectQuat);
+    const travel = THREE.MathUtils.smoothstep(t, 0.22, 1);
+    this.cartridge.root.position.lerpVectors(this.dockPos, this.liftPos, THREE.MathUtils.smoothstep(t, 0, 0.28));
+    this.cartridge.root.position.lerp(this.inspectPos, travel);
+    this.cartridge.root.quaternion.slerpQuaternions(this.dockQuat, this.inspectQuat, travel);
+    this.cartridge.spinner.rotation.set(this.cartRotX * travel, this.cartRotY * travel, 0);
+    this.gameCase.setTabFlex(Math.sin(Math.PI * THREE.MathUtils.clamp(t / 0.35, 0, 1)));
   }
 }

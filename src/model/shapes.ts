@@ -153,3 +153,78 @@ export function tag<T extends THREE.Object3D>(obj: T, part: string): T {
   obj.userData.part = part;
   return obj;
 }
+
+
+/** A continuous U profile around the back shoulder, spine and front shoulder. */
+function spinePoint(t: number, depth: number, radius: number, offset: number, edge: number) {
+  const arc = Math.PI * radius / 2;
+  const straight = depth - 2 * radius;
+  const length = arc * 2 + straight;
+  const distance = t * length;
+  let angle: number;
+  let zCenter: number;
+  if (distance < arc) {
+    angle = -Math.PI / 2 - distance / radius;
+    zCenter = radius;
+  } else if (distance <= arc + straight) {
+    return new THREE.Vector2(edge - radius - offset, radius + distance - arc);
+  } else {
+    angle = Math.PI - (distance - arc - straight) / radius;
+    zCenter = depth - radius;
+  }
+  return new THREE.Vector2(edge + (radius + offset) * Math.cos(angle),
+    zCenter + (radius + offset) * Math.sin(angle));
+}
+
+/** Rounded spine wall / clear film, with a real inner surface and soft top/bottom edges. */
+export function spineShell(depth: number, height: number, radius: number, edge: number,
+  offset: number, thickness: number, bevel = 0.012) {
+  const shape = new THREE.Shape();
+  const segments = 64;
+  for (let i = 0; i <= segments; i++) {
+    const p = spinePoint(i / segments, depth, radius, offset, edge);
+    if (i === 0) shape.moveTo(p.x, p.y);
+    else shape.lineTo(p.x, p.y);
+  }
+  for (let i = segments; i >= 0; i--) {
+    const p = spinePoint(i / segments, depth, radius, offset - thickness, edge);
+    shape.lineTo(p.x, p.y);
+  }
+  shape.closePath();
+  const endRound = Math.min(0.08, thickness / 2);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: height - 2 * endRound,
+    bevelEnabled: true, bevelThickness: endRound,
+    bevelSize: Math.min(bevel, thickness * 0.25), bevelSegments: 4, steps: 1,
+  });
+  geometry.rotateX(Math.PI / 2);
+  geometry.translate(0, height / 2 - endRound, 0);
+  return geometry;
+}
+
+/** Jacket follows the rounded shoulders; UVs advance by physical arc length. */
+export function spinePaper(depth: number, height: number, radius: number, edge: number,
+  offset: number, u0: number, u1: number, inner = false) {
+  const segments = 64;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const p = spinePoint(t, depth, radius, offset, edge);
+    positions.push(p.x, -height / 2, p.y, p.x, height / 2, p.y);
+    const u = THREE.MathUtils.lerp(u0, u1, inner ? 1 - t : t);
+    uvs.push(u, 0, u, 1);
+    if (i < segments) {
+      const a = i * 2;
+      if (inner) indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      else indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}

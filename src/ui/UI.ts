@@ -4,6 +4,10 @@ import type { ArtworkManager, CustomizationState } from '../art/canvasArt';
 import type { InteractionManager, ViewState } from '../interaction/InteractionManager';
 
 export class UIManager {
+  private renderRequest = 0;
+  private uploadGeneration = 0;
+  private uploadRequests = new Map<string, number>();
+  private readonly status = document.getElementById('status')!;
   private activePreset: GamePreset = PRESETS[0];
   private customState: CustomizationState = {
     title: PRESETS[0].title,
@@ -50,6 +54,7 @@ export class UIManager {
       btn.className = 'thumb-btn';
       if (idx === 0) btn.dataset.active = 'true';
       btn.setAttribute('aria-label', preset.name);
+      btn.setAttribute('aria-pressed', String(idx === 0));
       btn.style.setProperty('--tilt', `${(idx % 2 === 0 ? -1 : 1) * (3 + idx * 1.5)}deg`);
 
       btn.innerHTML = `
@@ -76,9 +81,12 @@ export class UIManager {
       b1.className = 'swatch';
       b1.style.backgroundColor = tint.swatch;
       b1.title = tint.name;
+      b1.dataset.tint = tint.id;
+      b1.setAttribute('aria-label', tint.name);
       b1.addEventListener('click', () => {
         this.selectTint(tint.id);
         this.colorPop.hidden = true;
+        this.btnColor.setAttribute('aria-expanded', 'false');
       });
       this.colorPop.appendChild(b1);
 
@@ -88,6 +96,8 @@ export class UIManager {
       b2.className = 'swatch';
       b2.style.backgroundColor = tint.swatch;
       b2.title = tint.name;
+      b2.dataset.tint = tint.id;
+      b2.setAttribute('aria-label', tint.name);
       b2.addEventListener('click', () => {
         this.selectTint(tint.id);
       });
@@ -99,6 +109,9 @@ export class UIManager {
 
   private updateColorDot() {
     this.colorDot.style.backgroundColor = this.plastic.current.swatch;
+    document.querySelectorAll<HTMLElement>('[data-tint]').forEach(el => {
+      el.setAttribute('aria-pressed', String(el.dataset.tint === this.plastic.current.id));
+    });
   }
 
   private selectTint(id: string) {
@@ -128,15 +141,24 @@ export class UIManager {
       }
     });
 
-    this.btnEdit.addEventListener('click', () => {
-      this.panel.hidden = !this.panel.hidden;
-      this.btnEdit.setAttribute('aria-expanded', String(!this.panel.hidden));
-    });
+    this.btnEdit.addEventListener('click', () => this.setPanel(Boolean(this.panel.hidden)));
 
     this.panelClose.addEventListener('click', () => {
-      this.panel.hidden = true;
-      this.btnEdit.setAttribute('aria-expanded', 'false');
+      this.setPanel(false);
     });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (!this.panel.hidden) this.setPanel(false);
+        this.colorPop.hidden = true;
+        this.btnColor.setAttribute('aria-expanded', 'false');
+      }
+      if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'e'
+        && !(e.target as HTMLElement)?.closest('input, textarea, [contenteditable="true"]')) {
+        this.setPanel(Boolean(this.panel.hidden));
+      }
+    });
+    document.getElementById('btn-inspect')!.addEventListener('click', () => this.interaction.toggleInspectCartridge());
 
     // Form live updates
     const onInput = () => {
@@ -144,7 +166,7 @@ export class UIManager {
       this.customState.subtitle = this.inSubtitle.value.trim();
       this.customState.spineText = this.inSpine.value.trim() || this.customState.title;
       this.customState.showTitleOverlay = this.inShowTitle.checked;
-      this.art.render(this.activePreset, this.customState);
+      void this.renderArtwork();
     };
 
     this.inTitle.addEventListener('input', onInput);
@@ -159,38 +181,55 @@ export class UIManager {
       const fileInput = label.querySelector('input')!;
       const thumb = label.querySelector('.thumb') as HTMLElement;
 
-      fileInput.addEventListener('change', () => {
+      fileInput.addEventListener('change', async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        const request = (this.uploadRequests.get(slot) ?? 0) + 1;
+        this.uploadRequests.set(slot, request);
+        const generation = this.uploadGeneration;
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 20 * 1024 * 1024) {
+          this.status.textContent = 'Choose a PNG, JPEG or WebP image under 20 MB.';
+          fileInput.value = '';
+          return;
+        }
+        const url = URL.createObjectURL(file);
+        try {
           const img = new Image();
-          img.onload = () => {
-            if (slot === 'front') this.customState.frontImageObj = img;
-            else if (slot === 'back') this.customState.backImageObj = img;
-            else if (slot === 'label') this.customState.labelImageObj = img;
-
-            thumb.style.backgroundImage = `url(${img.src})`;
-            this.art.render(this.activePreset, this.customState);
-          };
-          img.src = e.target?.result as string;
-        };
-        reader.readAsDataURL(file);
+          img.src = url;
+          await img.decode();
+          if (generation !== this.uploadGeneration || request !== this.uploadRequests.get(slot)) return;
+          if (img.width * img.height > 40_000_000) throw new Error('Image too large');
+          // Downsample user images before retaining them in the live editor.
+          const canvas = document.createElement('canvas');
+          const scale = Math.min(1, 2048 / Math.max(img.width, img.height));
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const textureImage = new Image();
+          textureImage.src = canvas.toDataURL('image/png');
+          await textureImage.decode();
+          if (generation !== this.uploadGeneration || request !== this.uploadRequests.get(slot)) return;
+          if (slot === 'front') this.customState.frontImageObj = textureImage;
+          else if (slot === 'back') this.customState.backImageObj = textureImage;
+          else this.customState.labelImageObj = textureImage;
+          thumb.style.backgroundImage = `url(${textureImage.src})`;
+          thumb.classList.add('has-image');
+          await this.renderArtwork();
+        } catch {
+          if (generation === this.uploadGeneration && request === this.uploadRequests.get(slot)) {
+            this.status.textContent = 'This image could not be read. Try another image (up to 40 megapixels).';
+          }
+        } finally {
+          URL.revokeObjectURL(url);
+          fileInput.value = '';
+        }
       });
     });
 
     this.btnRestore.addEventListener('click', () => {
-      this.customState.frontImageObj = undefined;
-      this.customState.backImageObj = undefined;
-      this.customState.labelImageObj = undefined;
-
-      document.querySelectorAll<HTMLElement>('.upload .thumb').forEach((el) => {
-        el.style.backgroundImage = '';
-      });
-
+      this.clearUploads();
       this.syncFormWithPreset(this.activePreset);
-      this.art.render(this.activePreset, this.customState);
+      void this.renderArtwork();
     });
 
     // Interaction state listener
@@ -214,10 +253,12 @@ export class UIManager {
 
   async selectPreset(preset: GamePreset) {
     this.activePreset = preset;
+    this.clearUploads();
 
     // Update active thumb in rail
     const buttons = this.rail.querySelectorAll('.thumb-btn');
     buttons.forEach((b, idx) => {
+      b.setAttribute('aria-pressed', String(PRESETS[idx].id === preset.id));
       if (PRESETS[idx].id === preset.id) {
         b.setAttribute('data-active', 'true');
       } else {
@@ -226,22 +267,53 @@ export class UIManager {
     });
 
     this.syncFormWithPreset(preset);
-    await this.art.render(preset, this.customState);
+    await this.renderArtwork();
+  }
+
+  private setPanel(open: boolean) {
+    this.panel.hidden = !open;
+    this.btnEdit.setAttribute('aria-expanded', String(open));
+    if (open) this.inTitle.focus();
+    else this.btnEdit.focus();
+  }
+
+  private clearUploads() {
+    this.uploadGeneration++;
+    this.customState.frontImageObj = this.customState.backImageObj = this.customState.labelImageObj = undefined;
+    document.querySelectorAll<HTMLElement>('.upload .thumb').forEach(el => {
+      el.style.backgroundImage = '';
+      el.classList.remove('has-image');
+    });
+    document.querySelectorAll<HTMLInputElement>('.upload input').forEach(el => { el.value = ''; });
+    this.status.textContent = '';
+  }
+
+  private async renderArtwork() {
+    const request = ++this.renderRequest;
+    this.status.textContent = '';
+    try {
+      await this.art.render(this.activePreset, this.customState);
+      if (request !== this.renderRequest) return;
+      document.title = `${this.customState.title} — Interactive Game Package`;
+      document.getElementById('edition-title')!.textContent = this.customState.title;
+    } catch {
+      if (request !== this.renderRequest) return;
+      this.status.textContent = 'Artwork could not be loaded. Choose a preset to try again.';
+    }
   }
 
   updateStateUI(state: ViewState) {
-    if (state === 'closed') {
-      this.btnOpen.setAttribute('aria-pressed', 'false');
-      this.btnOpen.title = 'Open the case (O)';
-      this.hint.textContent = 'Drag to turn · Tap the case to open';
-    } else if (state === 'open') {
-      this.btnOpen.setAttribute('aria-pressed', 'true');
-      this.btnOpen.title = 'Close the case (O)';
-      this.hint.textContent = 'Tap the cartridge to inspect · Drag to turn';
-    } else if (state === 'inspecting') {
-      this.btnOpen.setAttribute('aria-pressed', 'true');
-      this.hint.textContent = 'Drag to flip cartridge · Tap to return';
-    }
+    this.btnOpen.setAttribute('aria-pressed', String(state !== 'closed'));
+    const label = state === 'closed' ? 'Open the case' : 'Close the case';
+    this.btnOpen.setAttribute('aria-label', label);
+    this.btnOpen.title = `${label} (O)`;
+    this.hint.textContent = state === 'closed' ? 'Drag to turn · Tap the case to open'
+      : state === 'open' ? 'Drag to turn · Tap the cartridge to inspect'
+      : 'Drag to flip · Tap to return';
+    document.getElementById('inspector')!.hidden = state === 'closed';
+    const inspect = document.getElementById('btn-inspect') as HTMLButtonElement;
+    inspect.textContent = state === 'inspecting' ? 'Return cartridge ↩' : 'Inspect cartridge ↗';
+    inspect.disabled = state !== 'inspecting' && !this.interaction.canInspect;
   }
 
   hideLoader() {

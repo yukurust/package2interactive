@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -24,6 +24,9 @@
         <div class="tag">Premium Interactive Game Packaging</div>
       </header>
 
+      <div class="edition"><span id="edition-title">LUMIWARD</span><br />COLLECTOR’S EDITION / 001</div>
+      <div class="inspector" id="inspector" hidden><button id="btn-inspect" type="button">Inspect cartridge ↗</button></div>
+
       <p class="hint" id="hint" aria-live="polite">Drag to turn · Tap the case to open</p>
 
       <nav class="dock" id="dock" aria-label="Package controls">
@@ -47,7 +50,7 @@
           <button class="tool" id="btn-color" type="button" title="Case color" aria-label="Case color" aria-expanded="false">
             <span class="dot" id="color-dot"></span>
           </button>
-          <div class="popover" id="color-pop" hidden role="listbox" aria-label="Case colors"></div>
+          <div class="popover" id="color-pop" hidden role="group" aria-label="Case colors"></div>
         </div>
         <button class="tool" id="btn-edit" type="button" title="Customize & upload (E)" aria-label="Customize package" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -68,7 +71,7 @@
         <div class="panel-body">
           <label class="field"><span>Game title</span><input id="in-title" type="text" maxlength="32" autocomplete="off" spellcheck="false" /></label>
           <label class="field"><span>Subtitle</span><input id="in-subtitle" type="text" maxlength="48" autocomplete="off" /></label>
-          <label class="field"><span>Spine text</span><input id="in-spine" type="text" maxlength="32" autocomplete="off" spellcheck="false" /></label>
+          <label class="field"><span>Spine text</span><input id="in-spine" type="text" maxlength="64" autocomplete="off" spellcheck="false" /></label>
           <label class="check"><input id="in-showtitle" type="checkbox" checked /><span>Print title on the artwork</span></label>
 
           <div class="uploads">
@@ -85,7 +88,8 @@
               <span class="thumb"></span><span class="cap">Cartridge</span>
             </label>
           </div>
-          <p class="note">PNG / JPEG / WebP. Images are applied live as textures — nothing leaves your browser.</p>
+          <p class="status" id="status" role="status"></p>
+          <p class="note">PNG / JPEG / WebP, up to 20 MB. Images are applied live as textures — nothing leaves your browser.</p>
 
           <div class="field"><span>Case color</span><div class="swatches" id="panel-swatches"></div></div>
           <button class="ghost" id="btn-restore" type="button">Restore preset artwork</button>

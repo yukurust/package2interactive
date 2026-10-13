@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
-import type { Quality } from '../config';
+import { prefersReducedMotion, type Quality } from '../config';
 
 /* -------------------------------------------------------------------------- */
 /*  Fresnel edge patch                                                         */
@@ -14,15 +14,16 @@ import type { Quality } from '../config';
  */
 export const fresnelUniforms = {
   uEdgeColor: { value: new THREE.Color('#eef7ff') },
-  uEdgeStrength: { value: 0.22 },
+  uEdgeStrength: { value: 0.08 },
   uEdgePower: { value: 3.2 },
 };
 
-function patchFresnel(mat: THREE.MeshPhysicalMaterial, localStrength: number) {
+function patchFresnel(mat: THREE.MeshPhysicalMaterial, localStrength: number, tintEdge = true) {
   const uLocal = { value: localStrength };
+  const edgeColor = tintEdge ? fresnelUniforms.uEdgeColor : { value: new THREE.Color('#eef7ff') };
   mat.userData.edge = uLocal;
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uEdgeColor = fresnelUniforms.uEdgeColor;
+    shader.uniforms.uEdgeColor = edgeColor;
     shader.uniforms.uEdgeStrength = fresnelUniforms.uEdgeStrength;
     shader.uniforms.uEdgePower = fresnelUniforms.uEdgePower;
     shader.uniforms.uEdgeLocal = uLocal;
@@ -78,6 +79,7 @@ interface PlasticOptions {
   thickness: number;
   roughness?: number;
   edge?: number;
+  tintEdge?: boolean;
 }
 
 function makeClear(q: Quality, o: PlasticOptions) {
@@ -97,13 +99,13 @@ function makeClear(q: Quality, o: PlasticOptions) {
     attenuationDistance: 2.6,
     envMapIntensity: 1.2,
   });
-  patchFresnel(m, o.edge ?? 1);
+  patchFresnel(m, o.edge ?? 1, o.tintEdge);
   return m;
 }
 
 /**
- * All case plastic materials. They share a tint that can be animated live
- * without rebuilding geometry or recompiling shaders.
+ * Structural plastic is tinted independently of the optically clear windows
+ * and jacket film, preserving the color of the printed artwork.
  */
 export class PlasticSet {
   readonly panel: THREE.MeshPhysicalMaterial;
@@ -111,15 +113,17 @@ export class PlasticSet {
   readonly sleeve: THREE.MeshPhysicalMaterial;
   readonly detail: THREE.MeshPhysicalMaterial;
   readonly accent: THREE.MeshPhysicalMaterial;
-  readonly shadowProxy = new THREE.MeshBasicMaterial({ color: 0x000000 });
   private tintTween?: gsap.core.Tween;
   current: CaseTint = CASE_TINTS[0];
 
   constructor(q: Quality) {
-    this.panel = makeClear(q, { thickness: 0.22, edge: 0.8 });
+    this.panel = makeClear(q, { thickness: 0.22, edge: 0.8, tintEdge: false });
     this.rim = makeClear(q, { thickness: 0.7, edge: 1.4 });
-    this.sleeve = makeClear(q, { thickness: 0.05, roughness: 0.02, edge: 0.9 });
+    this.rim.transmission = 0.92;
+    this.sleeve = makeClear(q, { thickness: 0.05, roughness: 0.02, edge: 0.9, tintEdge: false });
     this.detail = makeClear(q, { thickness: 0.45, edge: 1.2 });
+
+    this.detail.transmission = 0.92;
 
     this.accent = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#ff3a3a'),
@@ -138,7 +142,7 @@ export class PlasticSet {
   }
 
   get tinted() {
-    return [this.panel, this.rim, this.sleeve, this.detail];
+    return [this.rim, this.detail];
   }
 
   private applyTint(to: CaseTint, t: number, from: CaseTint) {
@@ -155,10 +159,16 @@ export class PlasticSet {
 
   setTint(id: string, animate = true) {
     const to = CASE_TINTS.find((t) => t.id === id) ?? CASE_TINTS[0];
-    const from = this.current;
+    const from: CaseTint = {
+      ...this.current,
+      color: '#' + this.rim.color.getHexString(),
+      attenuation: '#' + this.rim.attenuationColor.getHexString(),
+      distance: this.rim.attenuationDistance,
+      edge: '#' + fresnelUniforms.uEdgeColor.value.getHexString(),
+    };
     this.current = to;
     this.tintTween?.kill();
-    if (!animate) {
+    if (!animate || prefersReducedMotion()) {
       this.applyTint(to, 1, to);
       return;
     }
@@ -179,9 +189,10 @@ export class PlasticSet {
 export function makePaper(map: THREE.Texture, inner = false) {
   return new THREE.MeshStandardMaterial({
     map,
-    roughness: inner ? 0.85 : 0.5,
+    roughness: inner ? 0.85 : 0.62,
+    color: 0xffffff,
     metalness: 0,
-    envMapIntensity: inner ? 0.7 : 0.85,
+    envMapIntensity: inner ? 0.55 : 0.65,
   });
 }
 
@@ -212,14 +223,14 @@ export function makeCartridgeMaterials(label: THREE.Texture, back: THREE.Texture
     back: new THREE.MeshStandardMaterial({
       map: back,
       bumpMap: back,
-      bumpScale: 2.2,
+      bumpScale: 0.035,
       roughness: 0.58,
       metalness: 0,
     }),
     window: new THREE.MeshStandardMaterial({ color: '#08080a', roughness: 0.7 }),
     contacts: new THREE.MeshStandardMaterial({
       color: new THREE.Color('#e2b257'),
-      metalness: 1,
+      metalness: 0.8,
       roughness: 0.26,
       envMapIntensity: 1.4,
     }),

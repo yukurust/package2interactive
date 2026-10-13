@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CART, DIM } from '../config';
 import { HINGE_EDGE, jacketLayout } from '../art/layout';
-import { extrudePanel, roundedPlane, tag, type Radii } from './shapes';
+import { extrudePanel, roundedPlane, spinePaper, spineShell, tag, type Radii } from './shapes';
 import type { PlasticSet } from './materials';
 
 export interface CaseMaterials {
@@ -65,6 +65,7 @@ export class GameCase {
     this.buildSpine();
     this.buildFront();
     this.buildHolder();
+    this.buildMolding();
 
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) tag(o, o.userData.part ?? 'case');
@@ -113,7 +114,7 @@ export class GameCase {
 
     // Outer clear sleeve that holds the jacket.
     this.mesh(
-      extrudePanel({ x0: px0, y0: -H / 2, x1, y1: H / 2, r: [0.06, rOpen, rOpen, 0.06], z0: -T / 2 - paperGap - sleeve, depth: sleeve, bevel: 0.009 }),
+      extrudePanel({ x0: px0, y0: -L.h / 2, x1: px1, y1: L.h / 2, r: [0.03, ro, ro, 0.03], z0: -T / 2 - paperGap - sleeve, depth: sleeve, bevel: 0.009 }),
       P.sleeve,
       g,
       'back-sleeve',
@@ -134,35 +135,28 @@ export class GameCase {
   private clip(parent: THREE.Object3D, x: number, y: number, zIn: number, dir: number, height = 0.24) {
     const P = this.m.plastic;
     const post = this.mesh(new RoundedBoxGeometry(0.12, 0.9, height, 2, 0.04), P.detail, parent, 'clip');
-    post.position.set(x, y, zIn + (height / 2) * Math.sign(dir === 0 ? 1 : 1) * (zIn < 0 ? 1 : -1));
+    const inward = parent === this.frontPivot ? -1 : 1;
+    post.position.set(x, y, zIn + height / 2 * inward);
     const lip = this.mesh(new RoundedBoxGeometry(0.34, 0.9, 0.06, 2, 0.025), P.detail, parent, 'clip-lip');
-    const top = zIn < 0 ? zIn + height - 0.03 : zIn - height + 0.03;
+    const top = zIn + inward * (height - 0.03);
     lip.position.set(x + dir * 0.12, y, top);
   }
 
   private buildSpine() {
-    const { H, T, wall, sleeve, paperGap } = DIM;
+    const { H, T, wall, sleeve, paperGap, rSpine } = DIM;
     const P = this.m.plastic;
     const g = this.spinePivot;
-
-    // Profile drawn in (z, y) then turned so the extrusion runs along −X.
-    const body = extrudePanel({ x0: 0, y0: -H / 2, x1: T, y1: H / 2, r: [0.14, 0.14, 0.14, 0.14], z0: 0, depth: wall, bevel: 0.03 });
-    body.rotateY(-Math.PI / 2);
-    body.translate(wall, 0, 0);
-    this.mesh(body, P.rim, g, 'spine');
-
     const L = jacketLayout();
-    const outer = this.mesh(roundedPlane(L.spineW, L.h, [0.04, 0.04, 0.04, 0.04], L.uSpine0, L.uSpine1), this.m.paperOuter, g, 'paper-spine-outer');
-    outer.rotation.y = -Math.PI / 2;
-    outer.position.set(-paperGap * 0.62, 0, T / 2);
-    const inner = this.mesh(roundedPlane(L.spineW, L.h, [0.04, 0.04, 0.04, 0.04], L.uSpine0, L.uSpine1), this.m.paperInner, g, 'paper-spine-inner');
-    inner.rotation.y = Math.PI / 2;
-    inner.position.set(-paperGap * 0.38, 0, T / 2);
 
-    const sl = extrudePanel({ x0: 0, y0: -H / 2, x1: T, y1: H / 2, r: [0.12, 0.12, 0.12, 0.12], z0: 0, depth: sleeve, bevel: 0.009 });
-    sl.rotateY(-Math.PI / 2);
-    sl.translate(-paperGap, 0, 0);
-    this.mesh(sl, P.sleeve, g, 'spine-sleeve');
+    // Rounded shoulders keep the two hinge endpoints fixed; the spine bulges
+    // outward, so opening does not drive the curved wall into either cover.
+    this.mesh(spineShell(T, H, rSpine, HINGE_EDGE, 0, wall), P.panel, g, 'spine');
+    this.mesh(spinePaper(T, L.h, rSpine, HINGE_EDGE, paperGap * 0.62,
+      L.uSpine0, L.uSpine1), this.m.paperOuter, g, 'paper-spine-outer');
+    this.mesh(spinePaper(T, L.h, rSpine, HINGE_EDGE, paperGap * 0.38,
+      L.uSpine0, L.uSpine1, true), this.m.paperInner, g, 'paper-spine-inner');
+    this.mesh(spineShell(T, H, rSpine, HINGE_EDGE, paperGap + sleeve, sleeve, 0.003),
+      P.sleeve, g, 'spine-sleeve');
   }
 
   private buildFront() {
@@ -194,7 +188,7 @@ export class GameCase {
     inner.position.set(pcx, 0, paperGap * 0.38);
 
     this.mesh(
-      extrudePanel({ x0: px0, y0: -H / 2, x1, y1: H / 2, r: [0.06, rOpen, rOpen, 0.06], z0: paperGap, depth: sleeve, bevel: 0.009 }),
+      extrudePanel({ x0: px0, y0: -L.h / 2, x1: px1, y1: L.h / 2, r: [0.03, ro, ro, 0.03], z0: paperGap, depth: sleeve, bevel: 0.009 }),
       P.sleeve,
       g,
       'front-sleeve',
@@ -205,15 +199,15 @@ export class GameCase {
       this.clip(g, x1 - rim - 0.26, y, -panel, -1);
     }
 
-    // Red latch tab on the opening edge — the case's accent part.
-    const tab = this.mesh(new RoundedBoxGeometry(0.09, 1.7, 0.72, 3, 0.04), P.accent, g, 'latch-tab');
+    // Clear latch tongue and fingertip grip on the opening edge.
+    const tab = this.mesh(new RoundedBoxGeometry(0.09, 1.7, 0.72, 3, 0.04), P.detail, g, 'latch-tab');
     tab.position.set(W + 0.1, 0, -0.34);
-    const grip = this.mesh(new RoundedBoxGeometry(0.03, 1.1, 0.06, 2, 0.012), P.accent, g, 'latch-grip');
+    const grip = this.mesh(new RoundedBoxGeometry(0.03, 1.1, 0.06, 2, 0.012), P.detail, g, 'latch-grip');
     grip.position.set(W + 0.15, 0, -0.34);
   }
 
   private buildHolder() {
-    const { H, W, T, panel } = DIM;
+    const { H, T, panel } = DIM;
     const P = this.m.plastic;
     const { clearance: c, frame: fw, base: bh, tabOverlap } = HOLDER;
     const cw = CART.w;
@@ -221,8 +215,9 @@ export class GameCase {
 
     const holder = new THREE.Group();
     holder.name = 'cartridge-holder';
-    const hx = W / 2 - 0.62 - (cw / 2 + c + fw);
-    const hy = -H / 2 + 1.25 + (ch / 2 + c + fw);
+    // Center on the right leaf, slightly below its midpoint.
+    const hx = (DIM.wall + DIM.gap) / 2;
+    const hy = -H * 0.18;
     holder.position.set(hx, hy, -T / 2 + panel);
     this.backHalf.add(holder);
 
@@ -262,6 +257,34 @@ export class GameCase {
     holder.add(this.cartridgeAnchor);
   }
 
+  /** Thin nested rails, living-hinge folds and registration ribs catch the studio strips. */
+  private buildMolding() {
+    const P = this.m.plastic;
+    for (const front of [false, true]) {
+      const parent = front ? this.frontPivot : this.backHalf;
+      const left = front ? DIM.wall + DIM.gap : -DIM.W / 2 + DIM.wall + DIM.gap;
+      const right = front ? DIM.W : DIM.W / 2;
+      const z = front ? -DIM.panel - 0.045 : -DIM.T / 2 + DIM.panel;
+      this.mesh(extrudePanel({
+        x0: left + 0.17, x1: right - 0.17,
+        y0: -DIM.H / 2 + 0.17, y1: DIM.H / 2 - 0.17,
+        r: [0.15, 0.34, 0.34, 0.15], z0: z, depth: 0.055,
+        wall: 0.045, bevel: 0.015,
+      }), P.detail, parent, 'molded-inner-rail');
+      for (const y of [-DIM.H / 2 + 0.2, DIM.H / 2 - 0.2]) {
+        for (const x of [left + 1, right - 1.1, (left + right) / 2]) {
+          const rib = this.mesh(new RoundedBoxGeometry(0.28, 0.18, 0.09, 2, 0.03), P.detail, parent, 'registration-rib');
+          rib.position.set(x, y, z);
+        }
+      }
+    }
+    for (const z of [0.035, DIM.T - 0.035]) {
+      const fold = this.mesh(new THREE.CylinderGeometry(0.065, 0.065, DIM.H - 0.36, 10),
+        P.detail, this.spinePivot, 'living-hinge-fold');
+      fold.position.set(DIM.wall, 0, z);
+    }
+  }
+
   /** 0 = rest, 1 = tabs fully flexed outward. */
   setTabFlex(f: number) {
     for (const t of this.tabs) t.mesh.position.x = t.baseX + t.dir * HOLDER.tabFlex * f;
@@ -297,11 +320,6 @@ export class GameCase {
     const b = this.bounds(Math.min(o, 1));
     this.centerer.position.set(-b.cx, 0, -b.cz);
     const e = o * o * (3 - 2 * Math.min(o, 1));
-    this.presenter.rotation.y = -0.34 * e;
-  }
-
-  /** Every mesh that should cast a contact shadow. */
-  get shadowCasters() {
-    return this.root;
+    this.presenter.rotation.y = -0.83 * e;
   }
 }

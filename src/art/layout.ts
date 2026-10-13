@@ -11,7 +11,8 @@ export const HINGE_EDGE = 0.022;
 
 export function jacketLayout() {
   const coverW = DIM.W - HINGE_EDGE - DIM.paperInset;
-  const spineW = DIM.T;
+  // Two quarter-round shoulders plus the flat middle of the spine.
+  const spineW = DIM.T + (Math.PI - 2) * DIM.rSpine;
   const h = DIM.H - 2 * DIM.paperInset;
   const total = coverW * 2 + spineW;
   return {

@@ -23,6 +23,7 @@ async function bootstrap() {
 
     // Initial render of first preset
     const initialPreset = PRESETS[0];
+    await document.fonts.ready;
     await art.render(initialPreset, {
       title: initialPreset.title,
       subtitle: initialPreset.subtitle,
@@ -53,16 +54,19 @@ async function bootstrap() {
     const ui = new UIManager(art, plastic, interaction);
 
     // 7. Render Loop
-    const clock = new THREE.Clock();
+    const timer = new THREE.Timer();
+    timer.connect(document);
 
     function animate() {
       requestAnimationFrame(animate);
-      const delta = Math.min(0.1, clock.getDelta());
+      timer.update();
+      const delta = Math.min(0.05, timer.getDelta());
 
       interaction.update(delta);
       sm.render();
     }
 
+    sm.fitPackage(0, 10);
     animate();
 
     // Resize handler

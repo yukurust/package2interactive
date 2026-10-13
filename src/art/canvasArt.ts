@@ -30,6 +30,8 @@ export class ArtworkManager {
   private readonly ctxLabel: CanvasRenderingContext2D;
   private readonly ctxBackDetail: CanvasRenderingContext2D;
 
+  private renderVersion = 0;
+  private fontCache = new Map<string, Promise<unknown>>();
   private imageCache = new Map<string, HTMLImageElement>();
 
   constructor(private readonly quality: Quality) {
@@ -197,7 +199,21 @@ export class ArtworkManager {
     ctx.restore();
   }
 
+  private loadFonts(preset: GamePreset) {
+    if (!this.fontCache.has(preset.id)) {
+      this.fontCache.set(preset.id, Promise.all([
+        document.fonts.load(`900 32px "${preset.fontTitle}"`),
+        document.fonts.load(`700 32px "${preset.fontTitle}"`),
+        document.fonts.load(`italic 600 20px "${preset.fontSub}"`),
+        document.fonts.load('500 20px Inter'),
+      ]).catch(() => undefined)); // System fonts remain usable offline.
+    }
+    return this.fontCache.get(preset.id);
+  }
+
   async render(preset: GamePreset, custom: CustomizationState) {
+    const version = ++this.renderVersion;
+    custom = { ...custom };
     const layout = jacketLayout();
     const px = this.quality.artPx;
 
@@ -211,8 +227,12 @@ export class ArtworkManager {
     const frontW = jacketW - frontX;
 
     // Load images
-    const frontImg = custom.frontImageObj || (await this.loadImage(preset.frontImage));
-    const backImg = custom.backImageObj || (await this.loadImage(preset.backImage));
+    const [frontImg, backImg] = await Promise.all([
+      custom.frontImageObj ?? this.loadImage(preset.frontImage),
+      custom.backImageObj ?? this.loadImage(preset.backImage),
+      this.loadFonts(preset),
+    ]);
+    if (version !== this.renderVersion) return;
 
     /* ------------------------------------------------------------- */
     /* 1. OUTER JACKET (Back cover | Spine | Front cover)             */
@@ -228,69 +248,72 @@ export class ArtworkManager {
       ctx.fillRect(0, 0, backW, jacketH);
     }
 
-    // Back cover subtle darkening overlay for editorial typography readability
-    const backGrad = ctx.createLinearGradient(0, 0, 0, jacketH);
-    backGrad.addColorStop(0, 'rgba(10, 14, 24, 0.75)');
-    backGrad.addColorStop(0.35, 'rgba(10, 14, 24, 0.45)');
-    backGrad.addColorStop(0.7, 'rgba(10, 14, 24, 0.7)');
-    backGrad.addColorStop(1, 'rgba(10, 14, 24, 0.95)');
-    ctx.fillStyle = backGrad;
-    ctx.fillRect(0, 0, backW, jacketH);
+    if (!custom.backImageObj) {
+      // Back cover subtle darkening overlay for editorial typography readability
+      const backGrad = ctx.createLinearGradient(0, 0, 0, jacketH);
+      backGrad.addColorStop(0, 'rgba(10, 14, 24, 0.75)');
+      backGrad.addColorStop(0.35, 'rgba(10, 14, 24, 0.45)');
+      backGrad.addColorStop(0.7, 'rgba(10, 14, 24, 0.7)');
+      backGrad.addColorStop(1, 'rgba(10, 14, 24, 0.95)');
+      ctx.fillStyle = backGrad;
+      ctx.fillRect(0, 0, backW, jacketH);
 
-    // Back title & synopsis
-    const margin = Math.round(backW * 0.08);
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'left';
-
-    // Back category tag
-    ctx.font = `600 ${Math.round(backW * 0.026)}px Inter, sans-serif`;
-    ctx.fillStyle = preset.accentColor;
-    ctx.fillText('LUMEN WORKS PRESENTS', margin, margin + 14);
-
-    // Back headline
-    ctx.font = `700 ${Math.round(backW * 0.052)}px ${preset.fontTitle}, serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(custom.title, margin, margin + 44);
-
-    // Synopsis wrap
-    ctx.font = `400 ${Math.round(backW * 0.032)}px Inter, sans-serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-    const words = preset.synopsis.split(' ');
-    let line = '';
-    let lineY = margin + 82;
-    const maxLineW = backW - margin * 2;
-    for (const w of words) {
-      const testLine = line + w + ' ';
-      if (ctx.measureText(testLine).width > maxLineW && line !== '') {
-        ctx.fillText(line, margin, lineY);
-        line = w + ' ';
-        lineY += 22;
-      } else {
-        line = testLine;
-      }
-    }
-    if (line) ctx.fillText(line, margin, lineY);
-
-    // Feature tags
-    let featY = lineY + 36;
-    for (const f of preset.features) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-      const pillW = ctx.measureText(f).width + 24;
-      ctx.fillRect(margin, featY - 14, pillW, 22);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(margin, featY - 14, pillW, 22);
-
+      // Back title & synopsis
+      const margin = Math.round(backW * 0.08);
+      ctx.save();
       ctx.fillStyle = '#ffffff';
-      ctx.font = `500 ${Math.round(backW * 0.026)}px Inter, sans-serif`;
-      ctx.fillText(f, margin + 12, featY + 2);
-      featY += 28;
-    }
+      ctx.textAlign = 'left';
 
-    // Barcode & specs at bottom
-    this.drawBarcode(ctx, margin, jacketH - margin - 46, 120, 46, '4 902370 536034');
-    ctx.restore();
+      // Back category tag
+      ctx.font = `600 ${Math.round(backW * 0.026)}px Inter, sans-serif`;
+      ctx.fillStyle = preset.accentColor;
+      ctx.fillText('LUMEN WORKS PRESENTS', margin, margin + 14);
+
+      // Back headline
+      ctx.font = `700 ${Math.round(backW * 0.052)}px ${preset.fontTitle}, serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(custom.title, margin, margin + backW * 0.095, backW - margin * 2);
+
+      // Synopsis wrap
+      ctx.font = `400 ${Math.round(backW * 0.032)}px Inter, sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+      const words = preset.synopsis.split(' ');
+      let line = '';
+      let lineY = margin + backW * 0.16;
+      const maxLineW = backW - margin * 2;
+      for (const w of words) {
+        const testLine = line + w + ' ';
+        if (ctx.measureText(testLine).width > maxLineW && line !== '') {
+          ctx.fillText(line, margin, lineY);
+          line = w + ' ';
+          lineY += backW * 0.047;
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) ctx.fillText(line, margin, lineY);
+
+      // Feature tags
+      let featY = lineY + backW * 0.09;
+      for (const f of preset.features) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        const pillW = ctx.measureText(f).width + 24;
+        ctx.fillRect(margin, featY - 14, pillW, 22);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(margin, featY - 14, pillW, 22);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `500 ${Math.round(backW * 0.026)}px Inter, sans-serif`;
+        ctx.fillText(f, margin + 12, featY + 2);
+        featY += backW * 0.045;
+      }
+
+      // Barcode & specs at bottom
+      this.drawBarcode(ctx, margin, jacketH - margin - 46, 120, 46, '4 902370 536034');
+      ctx.restore();
+
+    }
 
     // --- Spine ---
     ctx.save();
@@ -309,7 +332,7 @@ export class ArtworkManager {
     ctx.fillStyle = preset.spineTextColor;
     ctx.font = `700 ${Math.round(spineW * 0.44)}px ${preset.fontTitle}, sans-serif`;
     ctx.letterSpacing = '1px';
-    ctx.fillText(custom.spineText, 0, 0);
+    ctx.fillText(custom.spineText, 0, 0, jacketH * 0.76);
     ctx.restore();
 
     // Bottom publisher mark on spine
@@ -325,10 +348,11 @@ export class ArtworkManager {
     const notchW = frontW * 0.2;
     const notchH = notchW * 0.68;
     ctx.fillStyle = custom.spineColor || preset.spineColor;
-    ctx.fillRect(frontX, 0, notchW, notchH);
+
     // Bevel/radius bottom right of notch
     ctx.beginPath();
-    ctx.moveTo(frontX + notchW, 0);
+    ctx.moveTo(frontX, 0);
+    ctx.lineTo(frontX + notchW, 0);
     ctx.lineTo(frontX + notchW, notchH - 8);
     ctx.quadraticCurveTo(frontX + notchW, notchH, frontX + notchW - 8, notchH);
     ctx.lineTo(frontX, notchH);
@@ -341,13 +365,13 @@ export class ArtworkManager {
     // Title overlay (can be toggled)
     if (custom.showTitleOverlay) {
       const centerX = frontX + frontW / 2;
-      const titleY = jacketH * 0.22;
+      const titleY = jacketH * 0.235;
 
       ctx.save();
       ctx.textAlign = 'center';
 
       // Compass rose / star emblem above title
-      this.drawStarEmblem(ctx, centerX, titleY - 54, 28, preset.accentColor);
+      this.drawStarEmblem(ctx, centerX, jacketH * 0.122, frontW * 0.05, preset.accentColor);
 
       // Title drop shadow
       ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
@@ -355,18 +379,18 @@ export class ArtworkManager {
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 4;
 
-      ctx.font = `900 ${Math.round(frontW * 0.125)}px ${preset.fontTitle}, serif`;
+      ctx.font = `900 ${Math.round(frontW * 0.115)}px ${preset.fontTitle}, serif`;
       ctx.fillStyle = '#ffffff';
       ctx.letterSpacing = '3px';
-      ctx.fillText(custom.title, centerX, titleY);
+      ctx.fillText(custom.title, centerX, titleY, frontW * 0.89);
 
       // Subtitle
       if (custom.subtitle) {
         ctx.shadowBlur = 10;
-        ctx.font = `italic 600 ${Math.round(frontW * 0.046)}px ${preset.fontSub}, serif`;
+        ctx.font = `italic 600 ${Math.round(frontW * 0.042)}px ${preset.fontSub}, serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.letterSpacing = '1px';
-        ctx.fillText(`— ${custom.subtitle} —`, centerX, titleY + 34);
+        ctx.fillText(`— ${custom.subtitle} —`, centerX, titleY + jacketH * 0.038, frontW * 0.86);
       }
       ctx.restore();
     }
@@ -387,9 +411,9 @@ export class ArtworkManager {
 
     // High key translucent frost wash (like double-sided printed paper in clear case)
     const frost = ctxIn.createLinearGradient(0, 0, jacketW, jacketH);
-    frost.addColorStop(0, 'rgba(240, 246, 255, 0.82)');
-    frost.addColorStop(0.5, 'rgba(245, 250, 255, 0.78)');
-    frost.addColorStop(1, 'rgba(240, 246, 255, 0.84)');
+    frost.addColorStop(0, 'rgba(230, 237, 243, 0.58)');
+    frost.addColorStop(0.5, 'rgba(241, 246, 250, 0.66)');
+    frost.addColorStop(1, 'rgba(228, 237, 245, 0.64)');
     ctxIn.fillStyle = frost;
     ctxIn.fillRect(0, 0, jacketW, jacketH);
 
@@ -428,41 +452,43 @@ export class ArtworkManager {
       ctxL.fillRect(0, 0, lw, lh);
     }
 
-    // Top red banner
-    const bannerH = lh * 0.22;
-    ctxL.fillStyle = custom.spineColor || preset.spineColor;
-    ctxL.fillRect(0, 0, lw, bannerH);
+    if (!custom.labelImageObj) {
+      // Top red banner
+      const bannerH = lh * 0.22;
+      ctxL.fillStyle = custom.spineColor || preset.spineColor;
+      ctxL.fillRect(0, 0, lw, bannerH);
 
-    // Star in banner
-    this.drawStarEmblem(ctxL, lw / 2, bannerH / 2, bannerH * 0.32, '#ffffff');
+      // Star in banner
+      this.drawStarEmblem(ctxL, lw / 2, bannerH / 2, bannerH * 0.32, '#ffffff');
 
-    // Title in center of label
-    ctxL.save();
-    ctxL.textAlign = 'center';
-    ctxL.fillStyle = '#ffffff';
-    ctxL.shadowColor = 'rgba(0, 0, 0, 0.85)';
-    ctxL.shadowBlur = 8;
-    ctxL.shadowOffsetY = 2;
-    ctxL.font = `800 ${Math.round(lw * 0.16)}px ${preset.fontTitle}, sans-serif`;
-    ctxL.fillText(custom.title, lw / 2, lh * 0.52);
+      // Title in center of label
+      ctxL.save();
+      ctxL.textAlign = 'center';
+      ctxL.fillStyle = '#ffffff';
+      ctxL.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      ctxL.shadowBlur = 8;
+      ctxL.shadowOffsetY = 2;
+      ctxL.font = `800 ${Math.round(lw * 0.16)}px ${preset.fontTitle}, sans-serif`;
+      ctxL.fillText(custom.title, lw / 2, lh * 0.52, lw * 0.9);
 
-    if (custom.subtitle) {
-      ctxL.font = `600 ${Math.round(lw * 0.07)}px ${preset.fontSub}, sans-serif`;
-      ctxL.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctxL.fillText(custom.subtitle, lw / 2, lh * 0.62);
+      if (custom.subtitle) {
+        ctxL.font = `600 ${Math.round(lw * 0.07)}px ${preset.fontSub}, sans-serif`;
+        ctxL.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctxL.fillText(custom.subtitle, lw / 2, lh * 0.62, lw * 0.9);
+      }
+
+      // Bottom dark area with cartridge catalog code
+      const botH = lh * 0.14;
+      ctxL.shadowColor = 'transparent';
+      ctxL.fillStyle = 'rgba(15, 17, 22, 0.88)';
+      ctxL.fillRect(0, lh - botH, lw, botH);
+
+      ctxL.font = `600 ${Math.round(lw * 0.055)}px monospace`;
+      ctxL.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctxL.fillText(preset.cartridgeCode, lw / 2, lh - botH * 0.35);
+      ctxL.restore();
+
     }
-
-    // Bottom dark area with cartridge catalog code
-    const botH = lh * 0.14;
-    ctxL.shadowColor = 'transparent';
-    ctxL.fillStyle = 'rgba(15, 17, 22, 0.88)';
-    ctxL.fillRect(0, lh - botH, lw, botH);
-
-    ctxL.font = `600 ${Math.round(lw * 0.055)}px monospace`;
-    ctxL.fillStyle = 'rgba(255, 255, 255, 0.75)';
-    ctxL.fillText(preset.cartridgeCode, lw / 2, lh - botH * 0.35);
-    ctxL.restore();
-
     this.labelTexture.needsUpdate = true;
   }
 
@@ -478,15 +504,15 @@ export class ArtworkManager {
     ctx.fillStyle = '#2d2d34';
     ctx.font = '600 24px -apple-system, BlinkMacSystemFont, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('HAC-008', w / 2, h * 0.35);
+    ctx.fillText('LW-001', w / 2, h * 0.35);
 
     ctx.font = '500 16px -apple-system, BlinkMacSystemFont, sans-serif';
-    ctx.fillText('MODEL NO. HAC-008   MADE IN JAPAN', w / 2, h * 0.55);
+    ctx.fillText('MODEL NO. LW-001   LUMEN WORKS', w / 2, h * 0.55);
 
-    // CE & trash icons
+    // Fictional publisher and mold cavity marks
     ctx.font = '700 28px sans-serif';
-    ctx.fillText('CE', w * 0.28, h * 0.78);
-    ctx.fillText('UKCA', w * 0.72, h * 0.78);
+    ctx.fillText('LW', w * 0.28, h * 0.78);
+    ctx.fillText('01', w * 0.72, h * 0.78);
 
     this.backDetailTexture.needsUpdate = true;
   }
