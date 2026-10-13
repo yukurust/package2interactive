@@ -185,6 +185,11 @@ describe('molded geometry', () => {
     expect(goldHit.point.z).toBeCloseTo(-CART.d / 2, 2);
     expect(goldHit.face!.normal.z).toBeCloseTo(-1);
 
+    ray.set(new THREE.Vector3(0, -CART.h / 2 + 0.1, -1), new THREE.Vector3(0, 0, 1));
+    const lipHit = ray.intersectObject(card.root, true)[0];
+    expect(lipHit.object.name).toBe('cartridge-contacts');
+    expect(lipHit.point.z).toBeLessThan(-CART.d / 2 + 0.01);
+
     ray.set(new THREE.Vector3(0, goldMesh.position.y, -1), new THREE.Vector3(0, 0, 1));
     const backHits = ray.intersectObject(card.root, true);
 

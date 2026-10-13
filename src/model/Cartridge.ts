@@ -185,6 +185,20 @@ export class Cartridge {
       );
     }
 
+    // The band under the pins, down to the insertion edge, is terminal too.
+    const padW = pinSpacing * 0.62;
+    const lipTop = terminal.y - stripH / 2 + 0.002;
+    const lipBottom = -h / 2 + 0.04;
+    const lipH = lipTop - lipBottom;
+    const lipThick = 0.02;
+    const lip = this.mesh(
+      new THREE.BoxGeometry(stripW - pinSpacing + padW, lipH, lipThick),
+      this.mats.contacts,
+      this.spinner,
+      'cartridge-contacts',
+    );
+    lip.position.set(terminal.x, (lipTop + lipBottom) / 2, outerZ - 0.001 + lipThick / 2);
+
     // Plastic ribs sit in the gaps and stop short of the gold tips.
     const toothW = 0.022;
     const toothOuterZ = outerZ + 0.02;
