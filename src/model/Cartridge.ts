@@ -9,9 +9,8 @@ import { LABEL } from '../art/layout';
  *
  * Details:
  * - Matte dark body with notched edge and bevelled perimeter
- * - Glossy label recessed into the front face
- * - Molded directional arrow indicator
- * - Recessed top grip, serial block, and gold contacts sunk into the back
+ * - Glossy label set into a shallow front well
+ * - Recessed insertion arrow, top grip, and gold contacts sunk into the back
  */
 export class Cartridge {
   readonly root = new THREE.Group();
@@ -49,10 +48,14 @@ export class Cartridge {
     const { w, h, d, r } = CART;
     const grip = this.gripPocket(w, h);
     const terminal = this.terminalPocket(h);
-    const shape = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
-    this.addHole(shape, grip);
-    this.addHole(shape, terminal);
-    this.mesh(this.extrudeCard(shape, -d / 2, d), this.mats.body, this.spinner, 'cartridge-body');
+    const label = this.labelPocket();
+    const arrow = this.arrowMark(h);
+    const well = label.depth;
+
+    const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
+    this.addHole(body, grip);
+    this.addHole(body, terminal);
+    this.mesh(this.extrudeCard(body, -d / 2, d - well), this.mats.body, this.spinner, 'cartridge-body');
 
     const gripFloor = this.mesh(
       this.plate(grip.w + 0.1, grip.h + 0.1, grip.r),
@@ -62,36 +65,42 @@ export class Cartridge {
     );
     gripFloor.position.set(grip.x, grip.y, d / 2 - grip.depth);
     this.cap(grip, -d / 2, 'back');
-    // Covers the contact cut on the label side. The body face underneath still
-    // has that hole, so the dent opens only on the back.
+
+    // Front plate. The label and the insertion arrow are holes, so both sit
+    // below the outer face. The plate stays solid over the rear contact cut.
     const skin = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
     this.addHole(skin, grip);
-    const skinMesh = this.mesh(
-      new THREE.ShapeGeometry(skin, 8),
-      this.frontSkinMaterial(),
+    this.addHole(skin, label);
+    this.addArrowHole(skin, arrow);
+    this.mesh(
+      this.extrudeCard(skin, d / 2 - well, well, 0.012, 0.004),
+      this.mats.body,
       this.spinner,
       'cartridge-front-skin',
     );
-    skinMesh.position.z = d / 2;
 
-    // Molded directional arrow below the label (pointing down towards contacts).
-    const arrowShape = new THREE.Shape();
-    const aw = 0.28;
-    const ah = 0.18;
-    arrowShape.moveTo(-aw / 2, ah / 2);
-    arrowShape.lineTo(aw / 2, ah / 2);
-    arrowShape.lineTo(0, -ah / 2);
-    arrowShape.closePath();
+    // The label well overlaps the contact cut. Close that cut so the back
+    // pins do not show through the front.
+    const labelFloor = this.mesh(
+      this.plate(label.w + 0.06, label.h + 0.06, label.r),
+      this.mats.body,
+      this.spinner,
+      'label-well-floor',
+    );
+    labelFloor.position.set(label.x, label.y, d / 2 - well + 0.002);
 
-    const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, {
-      depth: 0.025,
-      bevelEnabled: true,
-      bevelThickness: 0.008,
-      bevelSize: 0.008,
-      bevelSegments: 1,
-    });
-    arrowGeo.translate(0, -h / 2 + 0.32, d / 2 + 0.01);
-    this.mesh(arrowGeo, this.mats.ridge, this.spinner, 'cartridge-arrow');
+    const mark = new THREE.Shape();
+    mark.moveTo(arrow.x - arrow.w / 2, arrow.y + arrow.h / 2);
+    mark.lineTo(arrow.x + arrow.w / 2, arrow.y + arrow.h / 2);
+    mark.lineTo(arrow.x, arrow.y - arrow.h / 2);
+    mark.closePath();
+    const arrowMesh = this.mesh(
+      new THREE.ShapeGeometry(mark, 1),
+      this.mats.body,
+      this.spinner,
+      'cartridge-arrow',
+    );
+    arrowMesh.position.z = d / 2 - well + 0.003;
   }
 
   private buildLabel() {
@@ -127,14 +136,13 @@ export class Cartridge {
     }
     uv.needsUpdate = true;
 
-    // Sits clear of the front skin. A few hundredths of a millimetre was inside
-    // the depth bias, so the label vanished into the shell as the card turned.
+    // On the floor of the shallow well, still clear of the shell behind it.
     const labelMat = this.mats.label as THREE.MeshPhysicalMaterial;
     labelMat.polygonOffset = true;
-    labelMat.polygonOffsetFactor = -6;
-    labelMat.polygonOffsetUnits = -6;
+    labelMat.polygonOffsetFactor = -1;
+    labelMat.polygonOffsetUnits = -1;
     const labelMesh = this.mesh(geo, labelMat, this.spinner, 'cartridge-label');
-    labelMesh.position.set(0, 0.12, d / 2 + 0.028);
+    labelMesh.position.set(0, 0.12, d / 2 - this.labelPocket().depth + 0.01);
     labelMesh.renderOrder = 2;
   }
 
@@ -199,6 +207,16 @@ export class Cartridge {
     backPanel.position.set(0, 0.42, -d / 2 - 0.002);
   }
 
+  /** Shallow pocket the label is stuck into. */
+  private labelPocket() {
+    return { x: 0, y: 0.12, w: LABEL.w + 0.04, h: LABEL.h + 0.04, r: 0.1, depth: 0.024 };
+  }
+
+  /** Downward triangle under the label, marking the insertion end. */
+  private arrowMark(h: number) {
+    return { x: 0, y: -h / 2 + 0.32, w: 0.28, h: 0.18 };
+  }
+
   /** Shallow groove near the top of the front face. */
   private gripPocket(w: number, h: number) {
     return { x: 0, y: h / 2 - 0.12, w: w * 0.72, h: 0.1, r: 0.032, depth: 0.06 };
@@ -224,30 +242,34 @@ export class Cartridge {
     ));
   }
 
-  private extrudeCard(shape: THREE.Shape, zBack: number, thickness: number) {
-    const b = 0.024;
+  private extrudeCard(
+    shape: THREE.Shape,
+    zBack: number,
+    thickness: number,
+    bevelSize = 0.024,
+    bevelThickness = bevelSize,
+  ) {
+    const bt = Math.min(bevelThickness, thickness * 0.45);
     const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: Math.max(0.001, thickness - 2 * b),
-      bevelEnabled: true,
-      bevelThickness: b,
-      bevelSize: b,
+      depth: Math.max(0.001, thickness - 2 * bt),
+      bevelEnabled: bt > 0.0008,
+      bevelThickness: bt,
+      bevelSize,
       bevelSegments: 2,
       curveSegments: 8,
     });
-    geo.translate(0, 0, zBack + b);
+    geo.translate(0, 0, zBack + bt);
     geo.computeVertexNormals();
     return geo;
   }
 
-  private skinMat?: THREE.MeshPhysicalMaterial;
-
-  /** Draws over the front lid so the contact hole does not show there. */
-  private frontSkinMaterial() {
-    this.skinMat ??= this.mats.body.clone();
-    this.skinMat.polygonOffset = true;
-    this.skinMat.polygonOffsetFactor = -2;
-    this.skinMat.polygonOffsetUnits = -2;
-    return this.skinMat;
+  private addArrowHole(shape: THREE.Shape, arrow: { x: number; y: number; w: number; h: number }) {
+    const hole = new THREE.Path();
+    hole.moveTo(arrow.x - arrow.w / 2, arrow.y + arrow.h / 2);
+    hole.lineTo(arrow.x + arrow.w / 2, arrow.y + arrow.h / 2);
+    hole.lineTo(arrow.x, arrow.y - arrow.h / 2);
+    hole.closePath();
+    shape.holes.push(hole);
   }
 
   /** Fills a pocket mouth so the cut stays on one face. */

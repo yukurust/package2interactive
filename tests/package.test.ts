@@ -190,11 +190,12 @@ describe('molded geometry', () => {
     }
   });
 
-  it('keeps the cartridge label in front of the shell from angled views', () => {
+  it('sets the label into a shallow front well', () => {
     const { card } = rig();
     card.root.updateMatrixWorld(true);
     const label = card.root.getObjectByName('cartridge-label') as THREE.Mesh;
-    expect(label.position.z).toBeGreaterThan(CART.d / 2 + 0.02);
+    expect(label.position.z).toBeLessThan(CART.d / 2 - 0.008);
+    expect(label.position.z).toBeGreaterThan(CART.d / 2 - 0.024);
     const ray = new THREE.Raycaster();
     const target = new THREE.Vector3(0, 0.12, label.position.z);
     for (const origin of [
@@ -205,6 +206,20 @@ describe('molded geometry', () => {
       ray.set(origin, target.clone().sub(origin).normalize());
       expect(ray.intersectObject(card.root, true)[0]?.object.name).toBe('cartridge-label');
     }
+  });
+
+  it('recesses the insertion arrow into the front face', () => {
+    const { card } = rig();
+    card.root.updateMatrixWorld(true);
+    const arrow = card.root.getObjectByName('cartridge-arrow') as THREE.Mesh;
+    arrow.geometry.computeBoundingBox();
+    const box = arrow.geometry.boundingBox!.clone().applyMatrix4(arrow.matrixWorld);
+    expect(box.max.z).toBeLessThan(CART.d / 2 - 0.01);
+    const ray = new THREE.Raycaster();
+    ray.set(new THREE.Vector3(0, -CART.h / 2 + 0.32, 1), new THREE.Vector3(0, 0, -1));
+    const hit = ray.intersectObject(card.root, true)[0];
+    expect(hit.object.name).toBe('cartridge-arrow');
+    expect(hit.point.z).toBeLessThan(CART.d / 2 - 0.01);
   });
   it('puts front booklet clips inside the lid and leaves a closed-shell clearance', () => {
     const { gameCase } = rig();
