@@ -10,8 +10,7 @@ import { LABEL } from '../art/layout';
  * Details:
  * - Matte dark body with notched edge and bevelled perimeter
  * - Glossy label set into a shallow front well
- * - Recessed insertion arrow and top grip
- * - Gold contacts that run out to the outer back face
+ * - Recessed insertion arrow, top grip, and gold contacts sunk into the back
  */
 export class Cartridge {
   readonly root = new THREE.Group();
@@ -151,6 +150,7 @@ export class Cartridge {
     const { w, h, d } = CART;
     const terminal = this.terminalPocket(h);
     const floorZ = -d / 2 + terminal.depth;
+    const goldZ = floorZ - 0.012;
 
     const win = this.mesh(
       this.plate(terminal.w + 0.1, terminal.h + 0.1, terminal.r),
@@ -161,48 +161,28 @@ export class Cartridge {
     win.rotation.y = Math.PI;
     win.position.set(terminal.x, terminal.y, floorZ);
 
-    // Gold fingers fill the pocket and stop on the outer back face,
-    // so the metal is what meets the outside.
-    const numPins = 8;
+    // Gold keeps its top edge and runs down to the insertion edge.
     const stripW = terminal.w - 0.1;
-    const stripH = terminal.h - 0.08;
-    const pinSpacing = stripW / numPins;
-    const outerZ = -d / 2;
-    const innerZ = floorZ - 0.004;
-    const padDepth = innerZ - outerZ;
-    const padGeo = new THREE.BoxGeometry(pinSpacing * 0.62, stripH, padDepth);
-    for (let i = 0; i < numPins; i++) {
-      const pad = this.mesh(
-        padGeo,
-        this.mats.contacts,
-        this.spinner,
-        'cartridge-contacts',
-      );
-      pad.position.set(
-        terminal.x - stripW / 2 + (i + 0.5) * pinSpacing,
-        terminal.y,
-        outerZ + padDepth / 2,
-      );
-    }
-
-    // The band under the pins, down to the insertion edge, is terminal too.
-    const padW = pinSpacing * 0.62;
-    const lipTop = terminal.y - stripH / 2 + 0.002;
-    const lipBottom = -h / 2 + 0.04;
-    const lipH = lipTop - lipBottom;
-    const lipThick = 0.02;
-    const lip = this.mesh(
-      new THREE.BoxGeometry(stripW - pinSpacing + padW, lipH, lipThick),
+    const goldTop = terminal.y + terminal.h / 2 - 0.04;
+    const goldBottom = -h / 2 + 0.055;
+    const stripH = goldTop - goldBottom;
+    const goldY = (goldTop + goldBottom) / 2;
+    const contactsGeo = new THREE.PlaneGeometry(stripW, stripH);
+    const contacts = this.mesh(
+      contactsGeo,
       this.mats.contacts,
       this.spinner,
       'cartridge-contacts',
     );
-    lip.position.set(terminal.x, (lipTop + lipBottom) / 2, outerZ - 0.001 + lipThick / 2);
+    contacts.rotation.y = Math.PI;
+    contacts.position.set(terminal.x, goldY, goldZ);
 
-    // Plastic ribs sit in the gaps and stop short of the gold tips.
+    // Plastic ribs stand above the gold and stop short of the outer face.
+    const numPins = 8;
     const toothW = 0.022;
-    const toothOuterZ = outerZ + 0.02;
-    const toothDepth = innerZ - toothOuterZ;
+    const pinSpacing = stripW / numPins;
+    const toothOuterZ = -d / 2 + 0.016;
+    const toothDepth = goldZ + 0.004 - toothOuterZ;
     const toothGeo = new THREE.BoxGeometry(toothW, stripH, toothDepth);
     for (let i = 1; i < numPins; i++) {
       const tooth = this.mesh(
@@ -213,7 +193,7 @@ export class Cartridge {
       );
       tooth.position.set(
         -stripW / 2 + i * pinSpacing,
-        terminal.y,
+        goldY,
         toothOuterZ + toothDepth / 2,
       );
     }
@@ -245,10 +225,12 @@ export class Cartridge {
     return { x: 0, y: h / 2 - 0.12, w: w * 0.72, h: 0.1, r: 0.032, depth: 0.06 };
   }
 
-  /** Contact window on the back, kept inside the corner radii. */
+  /** Contact window on the back. The top stays put; the bottom reaches the insertion edge. */
   private terminalPocket(h: number) {
-    const pocketH = 0.6;
-    return { x: 0, y: -h / 2 + 0.2 + pocketH / 2, w: 1.46, h: pocketH, r: 0.045, depth: 0.07 };
+    const bottom = 0.04;
+    const top = 0.8;
+    const pocketH = top - bottom;
+    return { x: 0, y: -h / 2 + (bottom + top) / 2, w: 1.46, h: pocketH, r: 0.045, depth: 0.07 };
   }
 
   private addHole(
