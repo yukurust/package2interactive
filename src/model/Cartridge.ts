@@ -52,8 +52,10 @@ export class Cartridge {
     const arrow = this.arrowMark(h);
     const well = label.depth;
 
-    // The rear bottom lip under the contacts is only a short step.
-    // Gold is unchanged. The body behind the lip stays solid.
+    // Rear lip and core share one bevel so the side wall is a single surface.
+    // They overlap through the joint, which hides the seam.
+    const bevel = 0.024;
+    const slit = 0.028;
     const shellThick = terminal.depth - 0.02;
     const shell = cartridgeShape(w, h, r, 0.45, 0.55, 0.08, {
       w: terminal.w,
@@ -61,17 +63,19 @@ export class Cartridge {
     });
     this.addHole(shell, grip);
     this.mesh(
-      this.extrudeCard(shell, -d / 2, shellThick, 0, 0),
+      this.extrudeCard(shell, -d / 2, shellThick, bevel, bevel),
       this.mats.body,
       this.spinner,
       'cartridge-body',
     );
 
+    const bodyStart = -d / 2 + shellThick - bevel;
+    const bodyEnd = d / 2 - well - slit;
     const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
     this.addHole(body, grip);
     this.addHole(body, terminal);
     this.mesh(
-      this.extrudeCard(body, -d / 2 + shellThick, d - well - shellThick),
+      this.extrudeCard(body, bodyStart, bodyEnd - bodyStart, bevel, bevel),
       this.mats.body,
       this.spinner,
       'cartridge-body',
@@ -93,7 +97,7 @@ export class Cartridge {
     this.addHole(skin, label);
     this.addArrowHole(skin, arrow);
     this.mesh(
-      this.extrudeCard(skin, d / 2 - well, well, 0.012, 0.004),
+      this.extrudeCard(skin, d / 2 - well, well, bevel, bevel),
       this.mats.body,
       this.spinner,
       'cartridge-front-skin',
