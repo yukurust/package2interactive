@@ -158,11 +158,91 @@ function parentBox(mesh: THREE.Mesh) {
 }
 
 describe('molded geometry', () => {
-  it('puts cartridge contacts outside the body, facing the back', () => {
+  it('recesses the top grip and sinks the contacts into the back', () => {
     const { card } = rig();
-    const contacts = card.root.getObjectByName('cartridge-contacts')!;
-    expect(contacts.position.z).toBeLessThan(-CART.d / 2);
-    expect(new THREE.Vector3(0, 0, 1).applyEuler(contacts.rotation).z).toBeCloseTo(-1);
+    card.root.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+
+    const gripY = CART.h / 2 - 0.12;
+    ray.set(new THREE.Vector3(0, gripY, 1), new THREE.Vector3(0, 0, -1));
+    const gripHit = ray.intersectObject(card.root, true)[0];
+    expect(gripHit.object.name).toBe('cartridge-top-recess');
+    expect(gripHit.point.z).toBeLessThan(CART.d / 2 - 0.03);
+    expect(gripHit.point.z).toBeGreaterThan(0);
+
+    ray.set(new THREE.Vector3(0, gripY, -1), new THREE.Vector3(0, 0, 1));
+    const gripBack = ray.intersectObject(card.root, true)[0];
+    expect(gripBack.point.z).toBeGreaterThan(-CART.d / 2 - 1e-4);
+    expect(gripBack.point.z).toBeLessThan(-CART.d / 2 + 0.02);
+
+    const terminalY = -CART.h / 2 + 0.5;
+    ray.set(new THREE.Vector3(0, terminalY, -1), new THREE.Vector3(0, 0, 1));
+    const backHits = ray.intersectObject(card.root, true);
+    const gold = backHits.find((hit) => hit.object.name === 'cartridge-contacts');
+    expect(gold).toBeTruthy();
+    expect(gold!.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
+    const goldMesh = card.root.getObjectByName('cartridge-contacts') as THREE.Mesh;
+    const goldBox = parentBox(goldMesh);
+    expect(goldBox.min.y).toBeGreaterThan(-CART.h / 2 + 0.02);
+    expect(goldBox.min.y).toBeLessThan(-CART.h / 2 + 0.04);
+    ray.set(new THREE.Vector3(0, -CART.h / 2 + 0.006, -1), new THREE.Vector3(0, 0, 1));
+    const wallHit = ray.intersectObject(card.root, true)[0];
+    expect(wallHit.object.name).toBe('cartridge-body');
+    expect(wallHit.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
+    expect(wallHit.point.z).toBeLessThan(0);
+    expect(backHits[0].point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
+    expect(new THREE.Vector3(0, 0, 1).applyEuler(gold!.object.rotation).z).toBeCloseTo(-1);
+
+    for (const hit of backHits) {
+      if (!hit.object.name.startsWith('contact-divider')) continue;
+      expect(hit.point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
+    }
+  });
+
+  it('reads as one shell from the side', () => {
+    const { card } = rig();
+    card.root.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    const y = -0.4;
+    const edge = [-CART.d / 2 + 0.02, 0, CART.d / 2 - 0.038, CART.d / 2 - 0.008].map((z) => {
+      ray.set(new THREE.Vector3(-2, y, z), new THREE.Vector3(1, 0, 0));
+      const hit = ray.intersectObject(card.root, true)[0];
+      expect(hit).toBeTruthy();
+      return hit.point.x;
+    });
+    expect(Math.max(...edge) - Math.min(...edge)).toBeLessThan(0.008);
+  });
+
+  it('sets the label into a shallow front well', () => {
+    const { card } = rig();
+    card.root.updateMatrixWorld(true);
+    const label = card.root.getObjectByName('cartridge-label') as THREE.Mesh;
+    expect(label.position.z).toBeLessThan(CART.d / 2 - 0.008);
+    expect(label.position.z).toBeGreaterThan(CART.d / 2 - 0.024);
+    const ray = new THREE.Raycaster();
+    const target = new THREE.Vector3(0, 0.12, label.position.z);
+    for (const origin of [
+      new THREE.Vector3(0, 0.12, 3),
+      new THREE.Vector3(1.1, 0.85, 2.4),
+      new THREE.Vector3(-0.9, -0.15, 1.8),
+    ]) {
+      ray.set(origin, target.clone().sub(origin).normalize());
+      expect(ray.intersectObject(card.root, true)[0]?.object.name).toBe('cartridge-label');
+    }
+  });
+
+  it('recesses the insertion arrow into the front face', () => {
+    const { card } = rig();
+    card.root.updateMatrixWorld(true);
+    const arrow = card.root.getObjectByName('cartridge-arrow') as THREE.Mesh;
+    arrow.geometry.computeBoundingBox();
+    const box = arrow.geometry.boundingBox!.clone().applyMatrix4(arrow.matrixWorld);
+    expect(box.max.z).toBeLessThan(CART.d / 2 - 0.01);
+    const ray = new THREE.Raycaster();
+    ray.set(new THREE.Vector3(0, -CART.h / 2 + 0.32, 1), new THREE.Vector3(0, 0, -1));
+    const hit = ray.intersectObject(card.root, true)[0];
+    expect(hit.object.name).toBe('cartridge-arrow');
+    expect(hit.point.z).toBeLessThan(CART.d / 2 - 0.01);
   });
   it('puts front booklet clips inside the lid and leaves a closed-shell clearance', () => {
     const { gameCase } = rig();
