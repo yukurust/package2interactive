@@ -38,7 +38,7 @@ export const HOLDER = {
  *
  * Hierarchy:
  *   root (user rotation, owned by the app)
- *    └ presenter (subtle yaw so the open case faces the viewer)
+ *    └ presenter (yaw so the open center faces local +Z)
  *       └ centerer (keeps the opened assembly centred on the pivot)
  *          ├ backHalf  — fixed tray, cartridge holder, back print
  *          └ spinePivot (back-left hinge axis, rotates θ/2)
@@ -382,6 +382,8 @@ export class GameCase {
     const b = this.bounds(Math.min(o, 1));
     this.centerer.position.set(-b.cx, 0, -b.cz);
     const e = o * o * (3 - 2 * Math.min(o, 1));
-    this.presenter.rotation.y = -0.83 * e;
+    // Fully open, the hinge bisector sits this far from +Z. Closed, leave it alone.
+    const face = DIM.openAngle / 2 - Math.PI / 2;
+    this.presenter.rotation.y = face * e;
   }
 }
