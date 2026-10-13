@@ -371,6 +371,8 @@ export function cartridgeShape(
   notchY: number,
   notchLen: number,
   notchDepth: number,
+  /** Opens the bottom edge so the contact mouth has no plastic lip. */
+  mouth?: { w: number; top: number },
 ): THREE.Shape {
   const x0 = -w / 2;
   const x1 = w / 2;
@@ -378,6 +380,14 @@ export function cartridgeShape(
   const y1 = h / 2;
   const s = new THREE.Shape();
   s.moveTo(x0 + r, y0);
+  if (mouth) {
+    const left = -mouth.w / 2;
+    const right = mouth.w / 2;
+    s.lineTo(left, y0);
+    s.lineTo(left, mouth.top);
+    s.lineTo(right, mouth.top);
+    s.lineTo(right, y0);
+  }
   s.lineTo(x1 - r, y0);
   s.absarc(x1 - r, y0 + r, r, -Math.PI / 2, 0, false);
   s.lineTo(x1, notchY - notchLen / 2);
