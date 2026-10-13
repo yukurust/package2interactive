@@ -158,7 +158,7 @@ function parentBox(mesh: THREE.Mesh) {
 }
 
 describe('molded geometry', () => {
-  it('recesses the top grip and sinks the contacts into the back', () => {
+  it('recesses the top grip and brings the contacts out to the back face', () => {
     const { card } = rig();
     card.root.updateMatrixWorld(true);
     const ray = new THREE.Raycaster();
@@ -175,14 +175,18 @@ describe('molded geometry', () => {
     expect(gripBack.point.z).toBeGreaterThan(-CART.d / 2 - 1e-4);
     expect(gripBack.point.z).toBeLessThan(-CART.d / 2 + 0.02);
 
-    const terminalY = -CART.h / 2 + 0.5;
-    ray.set(new THREE.Vector3(0, terminalY, -1), new THREE.Vector3(0, 0, 1));
+    const goldMesh = card.root.getObjectByName('cartridge-contacts') as THREE.Mesh;
+    ray.set(
+      new THREE.Vector3(goldMesh.position.x, goldMesh.position.y, -1),
+      new THREE.Vector3(0, 0, 1),
+    );
+    const goldHit = ray.intersectObject(card.root, true)[0];
+    expect(goldHit.object.name).toBe('cartridge-contacts');
+    expect(goldHit.point.z).toBeCloseTo(-CART.d / 2, 2);
+    expect(goldHit.face!.normal.z).toBeCloseTo(-1);
+
+    ray.set(new THREE.Vector3(0, goldMesh.position.y, -1), new THREE.Vector3(0, 0, 1));
     const backHits = ray.intersectObject(card.root, true);
-    const gold = backHits.find((hit) => hit.object.name === 'cartridge-contacts');
-    expect(gold).toBeTruthy();
-    expect(gold!.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
-    expect(backHits[0].point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
-    expect(new THREE.Vector3(0, 0, 1).applyEuler(gold!.object.rotation).z).toBeCloseTo(-1);
 
     for (const hit of backHits) {
       if (!hit.object.name.startsWith('contact-divider')) continue;

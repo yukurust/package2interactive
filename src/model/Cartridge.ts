@@ -10,7 +10,8 @@ import { LABEL } from '../art/layout';
  * Details:
  * - Matte dark body with notched edge and bevelled perimeter
  * - Glossy label set into a shallow front well
- * - Recessed insertion arrow, top grip, and gold contacts sunk into the back
+ * - Recessed insertion arrow and top grip
+ * - Gold contacts that run out to the outer back face
  */
 export class Cartridge {
   readonly root = new THREE.Group();
@@ -150,7 +151,6 @@ export class Cartridge {
     const { w, h, d } = CART;
     const terminal = this.terminalPocket(h);
     const floorZ = -d / 2 + terminal.depth;
-    const goldZ = floorZ - 0.012;
 
     const win = this.mesh(
       this.plate(terminal.w + 0.1, terminal.h + 0.1, terminal.r),
@@ -161,25 +161,34 @@ export class Cartridge {
     win.rotation.y = Math.PI;
     win.position.set(terminal.x, terminal.y, floorZ);
 
-    // Gold pads set back from the outer back face.
+    // Gold fingers fill the pocket and stop on the outer back face,
+    // so the metal is what meets the outside.
+    const numPins = 8;
     const stripW = terminal.w - 0.1;
     const stripH = terminal.h - 0.08;
-    const contactsGeo = new THREE.PlaneGeometry(stripW, stripH);
-    const contacts = this.mesh(
-      contactsGeo,
-      this.mats.contacts,
-      this.spinner,
-      'cartridge-contacts',
-    );
-    contacts.rotation.y = Math.PI;
-    contacts.position.set(terminal.x, terminal.y, goldZ);
-
-    // Plastic ribs stand above the gold and stop short of the outer face.
-    const numPins = 8;
-    const toothW = 0.022;
     const pinSpacing = stripW / numPins;
-    const toothOuterZ = -d / 2 + 0.016;
-    const toothDepth = goldZ + 0.004 - toothOuterZ;
+    const outerZ = -d / 2;
+    const innerZ = floorZ - 0.004;
+    const padDepth = innerZ - outerZ;
+    const padGeo = new THREE.BoxGeometry(pinSpacing * 0.62, stripH, padDepth);
+    for (let i = 0; i < numPins; i++) {
+      const pad = this.mesh(
+        padGeo,
+        this.mats.contacts,
+        this.spinner,
+        'cartridge-contacts',
+      );
+      pad.position.set(
+        terminal.x - stripW / 2 + (i + 0.5) * pinSpacing,
+        terminal.y,
+        outerZ + padDepth / 2,
+      );
+    }
+
+    // Plastic ribs sit in the gaps and stop short of the gold tips.
+    const toothW = 0.022;
+    const toothOuterZ = outerZ + 0.02;
+    const toothDepth = innerZ - toothOuterZ;
     const toothGeo = new THREE.BoxGeometry(toothW, stripH, toothDepth);
     for (let i = 1; i < numPins; i++) {
       const tooth = this.mesh(
