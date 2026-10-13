@@ -199,22 +199,18 @@ describe('molded geometry', () => {
     }
   });
 
-  it('reads as one shell from the side, with a slit before the front plate', () => {
+  it('reads as one shell from the side', () => {
     const { card } = rig();
     card.root.updateMatrixWorld(true);
     const ray = new THREE.Raycaster();
     const y = -0.4;
-    const edge = [-CART.d / 2 + 0.02, 0, CART.d / 2 - 0.008].map((z) => {
+    const edge = [-CART.d / 2 + 0.02, 0, CART.d / 2 - 0.038, CART.d / 2 - 0.008].map((z) => {
       ray.set(new THREE.Vector3(-2, y, z), new THREE.Vector3(1, 0, 0));
       const hit = ray.intersectObject(card.root, true)[0];
       expect(hit).toBeTruthy();
       return hit.point.x;
     });
     expect(Math.max(...edge) - Math.min(...edge)).toBeLessThan(0.008);
-
-    const slitZ = CART.d / 2 - 0.024 - 0.014;
-    ray.set(new THREE.Vector3(-2, y, slitZ), new THREE.Vector3(1, 0, 0));
-    expect(ray.intersectObject(card.root, true)[0]).toBeUndefined();
   });
 
   it('sets the label into a shallow front well', () => {

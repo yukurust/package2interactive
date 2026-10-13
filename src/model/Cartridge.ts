@@ -52,10 +52,10 @@ export class Cartridge {
     const arrow = this.arrowMark(h);
     const well = label.depth;
 
-    // Rear lip and core share one bevel so the side wall is a single surface.
-    // They overlap through the joint, which hides the seam.
+    // One bevel for the rear lip, core, and front plate. A short overlap
+    // at each joint keeps the side wall continuous, with no slit.
     const bevel = 0.024;
-    const slit = 0.028;
+    const bevelDepth = 0.004;
     const shellThick = terminal.depth - 0.02;
     const shell = cartridgeShape(w, h, r, 0.45, 0.55, 0.08, {
       w: terminal.w,
@@ -63,19 +63,19 @@ export class Cartridge {
     });
     this.addHole(shell, grip);
     this.mesh(
-      this.extrudeCard(shell, -d / 2, shellThick, bevel, bevel),
+      this.extrudeCard(shell, -d / 2, shellThick, bevel, bevelDepth),
       this.mats.body,
       this.spinner,
       'cartridge-body',
     );
 
-    const bodyStart = -d / 2 + shellThick - bevel;
-    const bodyEnd = d / 2 - well - slit;
+    const bodyStart = -d / 2 + shellThick - bevelDepth;
+    const bodyEnd = d / 2 - well + bevelDepth;
     const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
     this.addHole(body, grip);
     this.addHole(body, terminal);
     this.mesh(
-      this.extrudeCard(body, bodyStart, bodyEnd - bodyStart, bevel, bevel),
+      this.extrudeCard(body, bodyStart, bodyEnd - bodyStart, bevel, bevelDepth),
       this.mats.body,
       this.spinner,
       'cartridge-body',
@@ -97,7 +97,7 @@ export class Cartridge {
     this.addHole(skin, label);
     this.addArrowHole(skin, arrow);
     this.mesh(
-      this.extrudeCard(skin, d / 2 - well, well, bevel, bevel),
+      this.extrudeCard(skin, d / 2 - well, well, bevel, bevelDepth),
       this.mats.body,
       this.spinner,
       'cartridge-front-skin',
