@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CART } from '../config';
-import { cartridgeShape, tag } from './shapes';
+import { cartridgeShape, roundedRect, tag } from './shapes';
 import type { CartridgeMaterials } from './materials';
 import { LABEL } from '../art/layout';
 
@@ -12,7 +11,7 @@ import { LABEL } from '../art/layout';
  * - Matte dark body with notched edge and bevelled perimeter
  * - Glossy label recessed into the front face
  * - Molded directional arrow indicator
- * - Rear grip ribs, serial block, and recessed gold contacts with separating teeth
+ * - Recessed top grip, serial block, and gold contacts sunk into the back
  */
 export class Cartridge {
   readonly root = new THREE.Group();
@@ -48,25 +47,34 @@ export class Cartridge {
 
   private buildBody() {
     const { w, h, d, r } = CART;
-    const b = 0.024; // Bevel size
-
-    // Shape with keying notch on the right side
+    const grip = this.gripPocket(w, h);
+    const terminal = this.terminalPocket(h);
     const shape = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
+    this.addHole(shape, grip);
+    this.addHole(shape, terminal);
+    this.mesh(this.extrudeCard(shape, -d / 2, d), this.mats.body, this.spinner, 'cartridge-body');
 
-    const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: d - 2 * b,
-      bevelEnabled: true,
-      bevelThickness: b,
-      bevelSize: b,
-      bevelSegments: 2,
-      curveSegments: 8,
-    });
-    geo.translate(0, 0, -d / 2 + b);
-    geo.computeVertexNormals();
+    const gripFloor = this.mesh(
+      this.plate(grip.w + 0.1, grip.h + 0.1, grip.r),
+      this.mats.body,
+      this.spinner,
+      'cartridge-top-recess',
+    );
+    gripFloor.position.set(grip.x, grip.y, d / 2 - grip.depth);
+    this.cap(grip, -d / 2, 'back');
+    // Covers the contact cut on the label side. The body face underneath still
+    // has that hole, so the dent opens only on the back.
+    const skin = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
+    this.addHole(skin, grip);
+    const skinMesh = this.mesh(
+      new THREE.ShapeGeometry(skin, 8),
+      this.frontSkinMaterial(),
+      this.spinner,
+      'cartridge-front-skin',
+    );
+    skinMesh.position.z = d / 2;
 
-    this.mesh(geo, this.mats.body, this.spinner, 'cartridge-body');
-
-    // Molded directional arrow below the label (pointing down towards contacts)
+    // Molded directional arrow below the label (pointing down towards contacts).
     const arrowShape = new THREE.Shape();
     const aw = 0.28;
     const ah = 0.18;
@@ -82,13 +90,8 @@ export class Cartridge {
       bevelSize: 0.008,
       bevelSegments: 1,
     });
-    arrowGeo.translate(0, -h / 2 + 0.32, d / 2 - 0.015);
+    arrowGeo.translate(0, -h / 2 + 0.32, d / 2 + 0.01);
     this.mesh(arrowGeo, this.mats.ridge, this.spinner, 'cartridge-arrow');
-
-    // Molded finger grip ridge at the top edge
-    const gripGeo = new RoundedBoxGeometry(w * 0.72, 0.09, 0.04, 2, 0.015);
-    const grip = this.mesh(gripGeo, this.mats.ridge, this.spinner, 'cartridge-top-grip');
-    grip.position.set(0, h / 2 - 0.1, d / 2 - 0.01);
   }
 
   private buildLabel() {
@@ -131,18 +134,22 @@ export class Cartridge {
 
   private buildBackDetails() {
     const { w, h, d } = CART;
+    const terminal = this.terminalPocket(h);
+    const floorZ = -d / 2 + terminal.depth;
+    const goldZ = floorZ - 0.012;
 
-    // Back molded window / recessed circuit area at the bottom
-    const winW = w * 0.78;
-    const winH = 0.75;
-    const winD = 0.04;
-    const winGeo = new RoundedBoxGeometry(winW, winH, winD, 2, 0.02);
-    const win = this.mesh(winGeo, this.mats.window, this.spinner, 'back-window');
-    win.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 - winD / 2);
+    const win = this.mesh(
+      this.plate(terminal.w + 0.1, terminal.h + 0.1, terminal.r),
+      this.mats.window,
+      this.spinner,
+      'back-window',
+    );
+    win.rotation.y = Math.PI;
+    win.position.set(terminal.x, terminal.y, floorZ);
 
-    // Gold contact pins strip inside the recessed window
-    const stripW = winW - 0.08;
-    const stripH = winH - 0.08;
+    // Gold pads set back from the outer back face.
+    const stripW = terminal.w - 0.1;
+    const stripH = terminal.h - 0.08;
     const contactsGeo = new THREE.PlaneGeometry(stripW, stripH);
     const contacts = this.mesh(
       contactsGeo,
@@ -151,13 +158,15 @@ export class Cartridge {
       'cartridge-contacts',
     );
     contacts.rotation.y = Math.PI;
-    contacts.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 - winD - 0.003);
+    contacts.position.set(terminal.x, terminal.y, goldZ);
 
-    // Separating teeth / plastic dividers over the contacts
+    // Plastic ribs stand above the gold and stop short of the outer face.
     const numPins = 8;
     const toothW = 0.022;
     const pinSpacing = stripW / numPins;
-    const toothGeo = new THREE.BoxGeometry(toothW, stripH, 0.02);
+    const toothOuterZ = -d / 2 + 0.016;
+    const toothDepth = goldZ + 0.004 - toothOuterZ;
+    const toothGeo = new THREE.BoxGeometry(toothW, stripH, toothDepth);
     for (let i = 1; i < numPins; i++) {
       const tooth = this.mesh(
         toothGeo,
@@ -167,8 +176,8 @@ export class Cartridge {
       );
       tooth.position.set(
         -stripW / 2 + i * pinSpacing,
-        -h / 2 + winH / 2 + 0.12,
-        -d / 2 - winD - 0.012,
+        terminal.y,
+        toothOuterZ + toothDepth / 2,
       );
     }
 
@@ -182,6 +191,83 @@ export class Cartridge {
     );
     backPanel.rotation.y = Math.PI;
     backPanel.position.set(0, 0.42, -d / 2 - 0.002);
+  }
+
+  /** Shallow groove near the top of the front face. */
+  private gripPocket(w: number, h: number) {
+    return { x: 0, y: h / 2 - 0.12, w: w * 0.72, h: 0.1, r: 0.032, depth: 0.06 };
+  }
+
+  /** Contact window on the back, kept inside the corner radii. */
+  private terminalPocket(h: number) {
+    const pocketH = 0.6;
+    return { x: 0, y: -h / 2 + 0.2 + pocketH / 2, w: 1.46, h: pocketH, r: 0.045, depth: 0.07 };
+  }
+
+  private addHole(
+    shape: THREE.Shape,
+    p: { x: number; y: number; w: number; h: number; r: number },
+  ) {
+    shape.holes.push(roundedRect(
+      new THREE.Path(),
+      p.x - p.w / 2,
+      p.y - p.h / 2,
+      p.x + p.w / 2,
+      p.y + p.h / 2,
+      [p.r, p.r, p.r, p.r],
+    ));
+  }
+
+  private extrudeCard(shape: THREE.Shape, zBack: number, thickness: number) {
+    const b = 0.024;
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: Math.max(0.001, thickness - 2 * b),
+      bevelEnabled: true,
+      bevelThickness: b,
+      bevelSize: b,
+      bevelSegments: 2,
+      curveSegments: 8,
+    });
+    geo.translate(0, 0, zBack + b);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  private skinMat?: THREE.MeshPhysicalMaterial;
+
+  /** Draws over the front lid so the contact hole does not show there. */
+  private frontSkinMaterial() {
+    this.skinMat ??= this.mats.body.clone();
+    this.skinMat.polygonOffset = true;
+    this.skinMat.polygonOffsetFactor = -2;
+    this.skinMat.polygonOffsetUnits = -2;
+    return this.skinMat;
+  }
+
+  /** Fills a pocket mouth so the cut stays on one face. */
+  private cap(
+    p: { x: number; y: number; w: number; h: number; r: number },
+    z: number,
+    face: 'front' | 'back',
+  ) {
+    const cap = this.mesh(this.plate(p.w, p.h, p.r), this.mats.body, this.spinner);
+    cap.position.set(p.x, p.y, z);
+    if (face === 'back') cap.rotation.y = Math.PI;
+    return cap;
+  }
+
+  private plate(w: number, h: number, r: number) {
+    const shape = roundedRect(
+      new THREE.Shape(),
+      -w / 2,
+      -h / 2,
+      w / 2,
+      h / 2,
+      [r, r, r, r],
+    );
+    const geo = new THREE.ShapeGeometry(shape, 8);
+    geo.computeVertexNormals();
+    return geo;
   }
 
   updateLabelMap(texture: THREE.Texture) {

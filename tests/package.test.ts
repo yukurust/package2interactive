@@ -158,11 +158,36 @@ function parentBox(mesh: THREE.Mesh) {
 }
 
 describe('molded geometry', () => {
-  it('puts cartridge contacts outside the body, facing the back', () => {
+  it('recesses the top grip and sinks the contacts into the back', () => {
     const { card } = rig();
-    const contacts = card.root.getObjectByName('cartridge-contacts')!;
-    expect(contacts.position.z).toBeLessThan(-CART.d / 2);
-    expect(new THREE.Vector3(0, 0, 1).applyEuler(contacts.rotation).z).toBeCloseTo(-1);
+    card.root.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+
+    const gripY = CART.h / 2 - 0.12;
+    ray.set(new THREE.Vector3(0, gripY, 1), new THREE.Vector3(0, 0, -1));
+    const gripHit = ray.intersectObject(card.root, true)[0];
+    expect(gripHit.object.name).toBe('cartridge-top-recess');
+    expect(gripHit.point.z).toBeLessThan(CART.d / 2 - 0.03);
+    expect(gripHit.point.z).toBeGreaterThan(0);
+
+    ray.set(new THREE.Vector3(0, gripY, -1), new THREE.Vector3(0, 0, 1));
+    const gripBack = ray.intersectObject(card.root, true)[0];
+    expect(gripBack.point.z).toBeGreaterThan(-CART.d / 2 - 1e-4);
+    expect(gripBack.point.z).toBeLessThan(-CART.d / 2 + 0.02);
+
+    const terminalY = -CART.h / 2 + 0.5;
+    ray.set(new THREE.Vector3(0, terminalY, -1), new THREE.Vector3(0, 0, 1));
+    const backHits = ray.intersectObject(card.root, true);
+    const gold = backHits.find((hit) => hit.object.name === 'cartridge-contacts');
+    expect(gold).toBeTruthy();
+    expect(gold!.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
+    expect(backHits[0].point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
+    expect(new THREE.Vector3(0, 0, 1).applyEuler(gold!.object.rotation).z).toBeCloseTo(-1);
+
+    for (const hit of backHits) {
+      if (!hit.object.name.startsWith('contact-divider')) continue;
+      expect(hit.point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
+    }
   });
   it('puts front booklet clips inside the lid and leaves a closed-shell clearance', () => {
     const { gameCase } = rig();
