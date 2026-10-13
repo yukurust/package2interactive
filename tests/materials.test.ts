@@ -1,31 +1,24 @@
 import { expect, it } from 'vitest';
+import * as THREE from 'three';
 import { CASE_TINTS, PlasticSet } from '../src/model/materials';
 
-it('layers a diluted tint over the interior while keeping the exterior film neutral', () => {
+it('tints every clear material and the inner jacket, leaving the sticker neutral', () => {
   const plastic = new PlasticSet({ dispersion: 0 } as any);
-  const snapshot = (m: typeof plastic.panel) => [m.color.getHex(), m.attenuationColor.getHex(), m.attenuationDistance];
-  const before = snapshot(plastic.sleeve);
-  const windowShader = { uniforms: {}, fragmentShader: '' } as any;
-  const rimShader = { uniforms: {}, fragmentShader: '' } as any;
-  plastic.panel.onBeforeCompile(windowShader, null as any);
-  plastic.rim.onBeforeCompile(rimShader, null as any);
-  const neutralEdge = windowShader.uniforms.uEdgeColor.value.getHex();
-  for (const tint of CASE_TINTS) {
-    plastic.setTint(tint.id, false);
-    expect(snapshot(plastic.sleeve)).toEqual(before);
-    // Interior absorption is much weaker than the fully tinted molded edges.
-    for (const channel of ['r', 'g', 'b'] as const) {
-      expect(plastic.panel.attenuationColor[channel]).toBeCloseTo(
-        1 + (plastic.rim.attenuationColor[channel] - 1) * 0.42,
-      );
-      expect(plastic.panel.attenuationColor[channel]).toBeGreaterThanOrEqual(0.58);
-    }
-    if (tint.id !== 'crystal') {
-      expect(snapshot(plastic.panel)).not.toEqual(before);
-      expect(plastic.panel.attenuationDistance).toBeGreaterThan(plastic.rim.attenuationDistance);
-    }
-    expect(windowShader.uniforms.uEdgeColor.value.getHex()).toBe(neutralEdge);
-    expect(plastic.rim.attenuationDistance).toBe(tint.distance);
+  const inner = new THREE.MeshStandardMaterial({ color: '#ffffff' });
+  const sticker = new THREE.MeshStandardMaterial({ color: '#ffffff' });
+  plastic.attachInnerPaper(inner);
+
+  plastic.setTint('crimson', false);
+  const rimHex = plastic.rim.attenuationColor.getHex();
+  for (const part of [plastic.panel, plastic.sleeve, plastic.detail]) {
+    expect(part.attenuationColor.getHex()).toBe(rimHex);
+    expect(part.color.getHex()).toBe(plastic.rim.color.getHex());
+    expect(part.attenuationDistance).toBe(plastic.rim.attenuationDistance);
   }
-  expect(windowShader.uniforms.uEdgeColor).not.toBe(rimShader.uniforms.uEdgeColor);
+  expect(plastic.rim.attenuationDistance).toBe(CASE_TINTS.find((t) => t.id === 'crimson')!.distance);
+  expect(inner.color.getHex()).not.toBe(0xffffff);
+  expect(sticker.color.getHex()).toBe(0xffffff);
+
+  plastic.setTint('crystal', false);
+  expect(inner.color.getHex()).toBe(0xffffff);
 });

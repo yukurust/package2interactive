@@ -128,6 +128,12 @@ describe('package interactions', () => {
   });
 });
 
+function parentBox(mesh: THREE.Mesh) {
+  mesh.updateMatrix();
+  mesh.geometry.computeBoundingBox();
+  return mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrix);
+}
+
 describe('molded geometry', () => {
   it('puts cartridge contacts outside the body, facing the back', () => {
     const { card } = rig();
@@ -140,6 +146,97 @@ describe('molded geometry', () => {
     const clip = gameCase.frontPivot.getObjectByName('clip-lip')!;
     expect(clip.position.z).toBeLessThan(-DIM.panel);
     expect(DIM.T - DIM.rimBack - DIM.rimFront).toBeGreaterThan(0);
+  });
+
+  it('splits the two shells on the mid-plane', () => {
+    expect(DIM.rimBack).toBe(DIM.rimFront);
+    const backLip = -DIM.T / 2 + DIM.rimBack;
+    const frontLip = DIM.T / 2 - DIM.rimFront;
+    expect(backLip + frontLip).toBeCloseTo(0, 6);
+  });
+
+  it('leaves each shell open toward the hinge', () => {
+    const { gameCase } = rig();
+    const back = gameCase.backHalf.getObjectByName('back-rim') as THREE.Mesh;
+    const front = gameCase.frontPivot.getObjectByName('front-rim') as THREE.Mesh;
+    const backX0 = -DIM.W / 2 + DIM.wall + DIM.gap;
+    const frontX0 = DIM.wall + DIM.gap;
+    const crosses = (mesh: THREE.Mesh, yLine: number, accept: (minX: number) => boolean) => {
+      const pos = mesh.geometry.getAttribute('position');
+      const index = mesh.geometry.getIndex();
+      const at = (i: number, k: number) => (index ? index.getX(i + k) : i + k);
+      const nVerts = index ? index.count : pos.count;
+      let n = 0;
+      for (let i = 0; i < nVerts; i += 3) {
+        const xs = [0, 1, 2].map((k) => pos.getX(at(i, k)));
+        const ys = [0, 1, 2].map((k) => pos.getY(at(i, k)));
+        if (Math.min(...ys) < yLine && Math.max(...ys) > yLine && accept(Math.min(...xs))) n++;
+      }
+      return n;
+    };
+    expect(crosses(back, 0, (x) => x < backX0 + DIM.rim)).toBe(0);
+    expect(crosses(front, 0, (x) => x < frontX0 + DIM.rim)).toBe(0);
+    const abovePull = DIM.H * 0.35 + 0.5;
+    expect(crosses(back, abovePull, (x) => x > DIM.W / 2 - DIM.rim * 2)).toBeGreaterThan(0);
+    expect(crosses(front, abovePull, (x) => x > DIM.W - DIM.rim * 2)).toBeGreaterThan(0);
+  });
+
+  it('recesses one pill across the closed long edge, seventy percent of its length', () => {
+    const { gameCase } = rig();
+    const back = gameCase.backHalf.getObjectByName('edge-recess') as THREE.Mesh;
+    const front = gameCase.frontPivot.getObjectByName('edge-recess') as THREE.Mesh;
+    for (const mesh of [back, front]) {
+      mesh.geometry.computeBoundingBox();
+      const b = mesh.geometry.boundingBox!;
+      expect((b.max.y - b.min.y) / DIM.H).toBeCloseTo(0.7, 2);
+      expect(b.max.x - b.min.x).toBeGreaterThan(0.3);
+    }
+    expect(back.geometry.boundingBox!.max.z).toBeCloseTo(-DIM.T / 2 + DIM.rimBack, 2);
+    expect(front.geometry.boundingBox!.min.z).toBeCloseTo(-DIM.rimFront, 2);
+    expect(back.geometry.boundingBox!.max.x).toBeCloseTo(DIM.W / 2, 2);
+    expect(front.geometry.boundingBox!.max.x).toBeCloseTo(DIM.W, 2);
+  });
+
+  it('sticks the outer jacket on the outside of the clear film', () => {
+    const { gameCase } = rig();
+    const backPaper = parentBox(gameCase.backHalf.getObjectByName('paper-back-outer') as THREE.Mesh);
+    const backSleeve = parentBox(gameCase.backHalf.getObjectByName('back-sleeve') as THREE.Mesh);
+    const backInner = parentBox(gameCase.backHalf.getObjectByName('paper-back-inner') as THREE.Mesh);
+    const backFloor = parentBox(gameCase.backHalf.getObjectByName('back-floor') as THREE.Mesh);
+    expect(backPaper.max.z).toBeLessThan(backSleeve.min.z);
+    expect(backInner.max.z).toBeLessThan(backFloor.min.z);
+
+    const frontPaper = parentBox(gameCase.frontPivot.getObjectByName('paper-front-outer') as THREE.Mesh);
+    const frontSleeve = parentBox(gameCase.frontPivot.getObjectByName('front-sleeve') as THREE.Mesh);
+    expect(frontPaper.min.z).toBeGreaterThan(frontSleeve.max.z);
+  });
+
+  it('keeps the hinge seals out of both shells while opening', () => {
+    const { gameCase } = rig();
+    const seals = ['hinge-seal-back', 'hinge-seal-front'].map(
+      (name) => gameCase.spinePivot.getObjectByName(name) as THREE.Mesh,
+    );
+    const backMinX = -DIM.W / 2 + DIM.wall + DIM.gap;
+    const frontMinX = DIM.wall + DIM.gap;
+    const into = (seal: THREE.Mesh, space: THREE.Object3D, minX: number) => {
+      const pos = seal.geometry.getAttribute('position');
+      const m = new THREE.Matrix4().copy(space.matrixWorld).invert().multiply(seal.matrixWorld);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i += 1) {
+        v.fromBufferAttribute(pos as THREE.BufferAttribute, i).applyMatrix4(m);
+        if (v.x > minX - 0.004) return true;
+      }
+      return false;
+    };
+    for (const open of [0, 0.25, 0.5, 0.75, 1]) {
+      gameCase.open = open;
+      gameCase.update();
+      gameCase.root.updateMatrixWorld(true);
+      for (const seal of seals) {
+        expect(into(seal, gameCase.backHalf, backMinX)).toBe(false);
+        expect(into(seal, gameCase.frontPivot, frontMinX)).toBe(false);
+      }
+    }
   });
 });
 

@@ -35,6 +35,7 @@ async function bootstrap() {
     // 3. Materials
     const paperOuter = makePaper(art.outerTexture, false);
     const paperInner = makePaper(art.innerTexture, true);
+    plastic.attachInnerPaper(paperInner);
     const cartMats = makeCartridgeMaterials(art.labelTexture, art.backDetailTexture);
 
     // 4. 3D Models (Zero external model files, 100% Three.js procedural geometries)

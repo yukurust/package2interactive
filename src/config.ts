@@ -22,10 +22,13 @@ export const DIM = {
   panel: 0.1,
   /** Perimeter rim wall thickness. */
   rim: 0.085,
-  /** Back tray depth, measured from its outer surface to the rim top. */
-  rimBack: 0.62,
-  /** Front cover depth, measured from its outer surface to the rim bottom. */
-  rimFront: 0.46,
+  /**
+   * Back shell depth, outer face to the parting lip.
+   * Equal to the front so the split sits on the mid-plane (0.02 of clearance, centered).
+   */
+  rimBack: 0.54,
+  /** Front shell depth, outer face to the parting lip. */
+  rimFront: 0.54,
   /** Corner radius at the opening edge. */
   rOpen: 0.44,
   /** Corner radius at the hinge edge. */

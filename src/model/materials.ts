@@ -104,8 +104,10 @@ function makeClear(q: Quality, o: PlasticOptions) {
 }
 
 /**
- * Structural plastic takes the full case tint. Interior panels carry a light
- * tint over the inner artwork; the exterior jacket film stays colorless.
+ * Every clear part takes the case tint. The exterior jacket is an opaque
+ * sticker on the outside of that plastic, so its material stays neutral.
+ * The inner print sits behind the tinted shell and is multiplied by the same
+ * resin color, which is how it reads when you look through the clear back.
  */
 export class PlasticSet {
   readonly panel: THREE.MeshPhysicalMaterial;
@@ -113,14 +115,15 @@ export class PlasticSet {
   readonly sleeve: THREE.MeshPhysicalMaterial;
   readonly detail: THREE.MeshPhysicalMaterial;
   readonly accent: THREE.MeshPhysicalMaterial;
+  private innerPaper?: THREE.MeshStandardMaterial;
   private tintTween?: gsap.core.Tween;
   current: CaseTint = CASE_TINTS[0];
 
   constructor(q: Quality) {
-    this.panel = makeClear(q, { thickness: 0.22, edge: 0.8, tintEdge: false });
+    this.panel = makeClear(q, { thickness: 0.3, edge: 0.8 });
     this.rim = makeClear(q, { thickness: 0.7, edge: 1.4 });
     this.rim.transmission = 0.92;
-    this.sleeve = makeClear(q, { thickness: 0.05, roughness: 0.02, edge: 0.9, tintEdge: false });
+    this.sleeve = makeClear(q, { thickness: 0.2, roughness: 0.02, edge: 0.9 });
     this.detail = makeClear(q, { thickness: 0.45, edge: 1.2 });
 
     this.detail.transmission = 0.92;
@@ -142,7 +145,13 @@ export class PlasticSet {
   }
 
   get tinted() {
-    return [this.rim, this.detail];
+    return [this.panel, this.rim, this.sleeve, this.detail];
+  }
+
+  /** Inner jacket only. The exterior sticker is a separate, untinted material. */
+  attachInnerPaper(mat: THREE.MeshStandardMaterial) {
+    this.innerPaper = mat;
+    this.applyTint(this.current, 1, this.current);
   }
 
   private applyTint(to: CaseTint, t: number, from: CaseTint) {
@@ -154,13 +163,12 @@ export class PlasticSet {
       m.attenuationColor.copy(a);
       m.attenuationDistance = d;
     }
-    // The molded floor sits in front of the inner print, but behind the
-    // opaque exterior jacket. Diluted absorption gives the inside a subtle
-    // colored-resin layer without recoloring the outside cover or its film.
-    this.panel.color.set('#ffffff').lerp(c, 0.12);
-    this.panel.attenuationColor.set('#ffffff').lerp(a, 0.42);
-    this.panel.attenuationDistance = 1.5;
     fresnelUniforms.uEdgeColor.value.set(from.edge).lerp(new THREE.Color(to.edge), t);
+    if (this.innerPaper) {
+      // Short attenuation distance → stronger resin. Crystal (long distance) stays white.
+      const strength = THREE.MathUtils.clamp((0.9 - d) / 0.9, 0, 0.24);
+      this.innerPaper.color.set('#ffffff').lerp(a, strength);
+    }
   }
 
   setTint(id: string, animate = true) {

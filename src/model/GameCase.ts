@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CART, DIM } from '../config';
 import { HINGE_EDGE, jacketLayout } from '../art/layout';
-import { extrudePanel, roundedPlane, spinePaper, spineShell, tag, type Radii } from './shapes';
+import { extrudeOpenRim, extrudePanel, pillEdgeRecess, roundedPlane, spinePaper, spineShell, tag, type Radii } from './shapes';
 import type { PlasticSet } from './materials';
 
 export interface CaseMaterials {
@@ -11,7 +11,20 @@ export interface CaseMaterials {
   paperInner: THREE.Material;
 }
 
-/** Holder geometry constants (shared with the cartridge inspector). */
+/** Finger pull recessed into the closed case's long opening edge. */
+const EDGE_PULL = {
+  /** Fraction of the case height, which is the long edge. */
+  span: 0.7,
+  /** Depth of the dent, inward from the edge. */
+  depth: 0.55,
+  /** Width across the thickness. Stays clear of the cover panels and straddles the split. */
+  widthRatio: 0.76,
+} as const;
+
+function pullNotch() {
+  const half = (DIM.H * EDGE_PULL.span) / 2;
+  return { notchY0: -half, notchY1: half };
+}
 export const HOLDER = {
   clearance: 0.04,
   frame: 0.14,
@@ -29,9 +42,12 @@ export const HOLDER = {
  *       └ centerer (keeps the opened assembly centred on the pivot)
  *          ├ backHalf  — fixed tray, cartridge holder, back print
  *          └ spinePivot (back-left hinge axis, rotates θ/2)
- *             ├ spine
+ *             ├ spine + hinge seals (they plug each shell's open side)
  *             └ frontPivot (front-left hinge axis, rotates another θ/2)
  *                └ front cover
+ *
+ * Each shell's rim is a C, open toward the hinge. Closed, the spine seals
+ * sit in that opening. The shells meet on the mid-plane.
  *
  * Splitting the opening angle between two hinge axes is what real
  * clamshell cases do; it lets the covers swing without intersecting.
@@ -63,6 +79,7 @@ export class GameCase {
 
     this.buildBack();
     this.buildSpine();
+    this.buildHingeSeals();
     this.buildFront();
     this.buildHolder();
     this.buildMolding();
@@ -90,25 +107,29 @@ export class GameCase {
     const r: Radii = [rHinge, rOpen, rOpen, rHinge];
     const g = this.backHalf;
 
-    // Moulded tray = perimeter rim + floor plate tucked inside it.
-    this.mesh(extrudePanel({ x0, y0: -H / 2, x1, y1: H / 2, r, z0: -T / 2, depth: rimBack, bevel: 0.024, wall: rim }), P.rim, g, 'back-rim');
+    const pull = pullNotch();
+    // C-shaped rim, open on the hinge (left). The long edge is notched for the finger pull.
+    this.mesh(extrudeOpenRim({ x0, y0: -H / 2, x1, y1: H / 2, r, z0: -T / 2, depth: rimBack, bevel: 0.024, wall: rim, open: 'left', ...pull }), P.rim, g, 'back-rim');
     const fi = rim - 0.014;
+    const floorR: Radii = [rHinge, Math.max(0.04, rOpen - fi), Math.max(0.04, rOpen - fi), rHinge];
     this.mesh(
-      extrudePanel({ x0: x0 + fi, y0: -H / 2 + fi, x1: x1 - fi, y1: H / 2 - fi, r: r.map((v) => Math.max(0.04, v - fi)) as Radii, z0: -T / 2, depth: panel, bevel: 0.012 }),
+      extrudePanel({ x0, y0: -H / 2 + fi, x1: x1 - fi, y1: H / 2 - fi, r: floorR, z0: -T / 2, depth: panel, bevel: 0.012 }),
       P.panel,
       g,
       'back-floor',
     );
 
-    // Paper jacket (outer print faces −Z, inner print faces +Z).
+    // Outer print is a sticker on the outside of the clear film. Inner print
+    // sits behind the tinted floor, so the resin colors it from the inside.
     const L = jacketLayout();
     const px0 = -W / 2 + HINGE_EDGE;
     const px1 = W / 2 - paperInset;
     const pcx = (px0 + px1) / 2;
     const ro = rOpen - paperInset;
+    const sleeveOuter = -T / 2 - paperGap - sleeve;
     const outer = this.mesh(roundedPlane(L.coverW, L.h, [ro, 0.03, 0.03, ro], 0, L.uSpine0), this.m.paperOuter, g, 'paper-back-outer');
     outer.rotation.y = Math.PI;
-    outer.position.set(pcx, 0, -T / 2 - paperGap * 0.62);
+    outer.position.set(pcx, 0, sleeveOuter - 0.004);
     const inner = this.mesh(roundedPlane(L.coverW, L.h, [0.03, ro, ro, 0.03], L.uSpine1, 1), this.m.paperInner, g, 'paper-back-inner');
     inner.position.set(pcx, 0, -T / 2 - paperGap * 0.38);
 
@@ -126,9 +147,7 @@ export class GameCase {
       this.clip(g, x0 + rim + 0.26, y, zIn, 1);
     }
 
-    // Latch bump on the outside of the rim (the front cover's tab snaps over it).
-    const bump = this.mesh(new RoundedBoxGeometry(0.05, 1.3, 0.09, 2, 0.02), P.detail, g, 'latch-bump');
-    bump.position.set(W / 2 + 0.022, 0, -T / 2 + rimBack - 0.1);
+    this.edgePull(g, x1, -T / 2, -T / 2 + rimBack, 0, 'z1');
   }
 
   /** Small L-shaped leaflet clip. `dir` points toward the case interior along X. */
@@ -151,12 +170,35 @@ export class GameCase {
     // Rounded shoulders keep the two hinge endpoints fixed; the spine bulges
     // outward, so opening does not drive the curved wall into either cover.
     this.mesh(spineShell(T, H, rSpine, HINGE_EDGE, 0, wall), P.panel, g, 'spine');
-    this.mesh(spinePaper(T, L.h, rSpine, HINGE_EDGE, paperGap * 0.62,
+    // Sticker sits outside the clear film. Inner print stays behind it.
+    this.mesh(spinePaper(T, L.h, rSpine, HINGE_EDGE, paperGap + sleeve + 0.004,
       L.uSpine0, L.uSpine1), this.m.paperOuter, g, 'paper-spine-outer');
     this.mesh(spinePaper(T, L.h, rSpine, HINGE_EDGE, paperGap * 0.38,
       L.uSpine0, L.uSpine1, true), this.m.paperInner, g, 'paper-spine-inner');
     this.mesh(spineShell(T, H, rSpine, HINGE_EDGE, paperGap + sleeve, sleeve, 0.003),
       P.sleeve, g, 'spine-sleeve');
+  }
+
+  /**
+   * Plugs that sit in each shell's open hinge side while the case is closed.
+   * They stay on the spine and swing clear of both covers as it opens.
+   */
+  private buildHingeSeals() {
+    const reach = DIM.wall + DIM.gap - 0.02;
+    const x0 = 0.02;
+    const w = reach - x0;
+    const h = DIM.H - 2 * (DIM.rim + 0.08);
+    const cx = (x0 + reach) / 2;
+    const g = this.spinePivot;
+
+    const backD = DIM.rimBack - 0.08;
+    const back = this.mesh(new RoundedBoxGeometry(w, h, backD, 3, 0.035), this.m.plastic.rim, g, 'hinge-seal-back');
+    back.position.set(cx, 0, 0.04 + backD / 2);
+
+    const frontD = DIM.rimFront - 0.24;
+    const frontZ = DIM.T - DIM.rimFront + 0.12;
+    const front = this.mesh(new RoundedBoxGeometry(w, h, frontD, 3, 0.035), this.m.plastic.rim, g, 'hinge-seal-front');
+    front.position.set(cx, 0, frontZ + frontD / 2);
   }
 
   private buildFront() {
@@ -167,10 +209,12 @@ export class GameCase {
     const x1 = W;
     const r: Radii = [rHinge, rOpen, rOpen, rHinge];
 
-    this.mesh(extrudePanel({ x0, y0: -H / 2, x1, y1: H / 2, r, z0: -rimFront, depth: rimFront, bevel: 0.024, wall: rim }), P.rim, g, 'front-rim');
+    const pull = pullNotch();
+    this.mesh(extrudeOpenRim({ x0, y0: -H / 2, x1, y1: H / 2, r, z0: -rimFront, depth: rimFront, bevel: 0.024, wall: rim, open: 'left', ...pull }), P.rim, g, 'front-rim');
     const fi = rim - 0.014;
+    const floorR: Radii = [rHinge, Math.max(0.04, rOpen - fi), Math.max(0.04, rOpen - fi), rHinge];
     this.mesh(
-      extrudePanel({ x0: x0 + fi, y0: -H / 2 + fi, x1: x1 - fi, y1: H / 2 - fi, r: r.map((v) => Math.max(0.04, v - fi)) as Radii, z0: -panel, depth: panel, bevel: 0.012 }),
+      extrudePanel({ x0, y0: -H / 2 + fi, x1: x1 - fi, y1: H / 2 - fi, r: floorR, z0: -panel, depth: panel, bevel: 0.012 }),
       P.panel,
       g,
       'front-floor',
@@ -181,8 +225,9 @@ export class GameCase {
     const px1 = W - paperInset;
     const pcx = (px0 + px1) / 2;
     const ro = rOpen - paperInset;
+    const sleeveOuter = paperGap + sleeve;
     const outer = this.mesh(roundedPlane(L.coverW, L.h, [0.03, ro, ro, 0.03], L.uSpine1, 1), this.m.paperOuter, g, 'paper-front-outer');
-    outer.position.set(pcx, 0, paperGap * 0.62);
+    outer.position.set(pcx, 0, sleeveOuter + 0.004);
     const inner = this.mesh(roundedPlane(L.coverW, L.h, [ro, 0.03, 0.03, ro], 0, L.uSpine0), this.m.paperInner, g, 'paper-front-inner');
     inner.rotation.y = Math.PI;
     inner.position.set(pcx, 0, paperGap * 0.38);
@@ -194,16 +239,32 @@ export class GameCase {
       'front-sleeve',
     );
 
-    // Leaflet clips along the opening edge.
+    // Leaflet clips along the opening edge, clear of the finger pull.
+    const half = (DIM.H * EDGE_PULL.span) / 2;
     for (const y of [H / 2 - 2.2, 0.4, -H / 2 + 3.4]) {
+      if (Math.abs(y) < half + 0.35) continue;
       this.clip(g, x1 - rim - 0.26, y, -panel, -1);
     }
 
-    // Clear latch tongue and fingertip grip on the opening edge.
-    const tab = this.mesh(new RoundedBoxGeometry(0.09, 1.7, 0.72, 3, 0.04), P.detail, g, 'latch-tab');
-    tab.position.set(W + 0.1, 0, -0.34);
-    const grip = this.mesh(new RoundedBoxGeometry(0.03, 1.1, 0.06, 2, 0.012), P.detail, g, 'latch-grip');
-    grip.position.set(W + 0.15, 0, -0.34);
+    this.edgePull(g, x1, -rimFront, 0, -DIM.T / 2, 'z0');
+  }
+
+  /**
+   * Pill dent along the opening edge. Each shell owns the half on its side of
+   * the split; closed, they read as one groove 70% the length of the long edge.
+   */
+  private edgePull(parent: THREE.Object3D, xOuter: number, z0: number, z1: number, zCenter: number, parting: 'z0' | 'z1') {
+    this.mesh(pillEdgeRecess({
+      xOuter,
+      depth: EDGE_PULL.depth,
+      length: DIM.H * EDGE_PULL.span,
+      width: DIM.T * EDGE_PULL.widthRatio,
+      zCenter,
+      z0,
+      z1,
+      parting,
+      wall: DIM.rim,
+    }), this.m.plastic.rim, parent, 'edge-recess');
   }
 
   private buildHolder() {
@@ -265,11 +326,12 @@ export class GameCase {
       const left = front ? DIM.wall + DIM.gap : -DIM.W / 2 + DIM.wall + DIM.gap;
       const right = front ? DIM.W : DIM.W / 2;
       const z = front ? -DIM.panel - 0.045 : -DIM.T / 2 + DIM.panel;
-      this.mesh(extrudePanel({
+      const pull = pullNotch();
+      this.mesh(extrudeOpenRim({
         x0: left + 0.17, x1: right - 0.17,
         y0: -DIM.H / 2 + 0.17, y1: DIM.H / 2 - 0.17,
         r: [0.15, 0.34, 0.34, 0.15], z0: z, depth: 0.055,
-        wall: 0.045, bevel: 0.015,
+        wall: 0.045, bevel: 0.012, open: 'left', ...pull,
       }), P.detail, parent, 'molded-inner-rail');
       for (const y of [-DIM.H / 2 + 0.2, DIM.H / 2 - 0.2]) {
         for (const x of [left + 1, right - 1.1, (left + right) / 2]) {
