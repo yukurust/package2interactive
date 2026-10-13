@@ -52,10 +52,30 @@ export class Cartridge {
     const arrow = this.arrowMark(h);
     const well = label.depth;
 
+    // The rear bottom lip under the contacts is only a short step.
+    // Gold is unchanged. The body behind the lip stays solid.
+    const shellThick = terminal.depth - 0.02;
+    const shell = cartridgeShape(w, h, r, 0.45, 0.55, 0.08, {
+      w: terminal.w,
+      top: terminal.y + terminal.h / 2,
+    });
+    this.addHole(shell, grip);
+    this.mesh(
+      this.extrudeCard(shell, -d / 2, shellThick, 0, 0),
+      this.mats.body,
+      this.spinner,
+      'cartridge-body',
+    );
+
     const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
     this.addHole(body, grip);
     this.addHole(body, terminal);
-    this.mesh(this.extrudeCard(body, -d / 2, d - well), this.mats.body, this.spinner, 'cartridge-body');
+    this.mesh(
+      this.extrudeCard(body, -d / 2 + shellThick, d - well - shellThick),
+      this.mats.body,
+      this.spinner,
+      'cartridge-body',
+    );
 
     const gripFloor = this.mesh(
       this.plate(grip.w + 0.1, grip.h + 0.1, grip.r),
@@ -227,7 +247,7 @@ export class Cartridge {
 
   /** Contact window on the back. The top stays put; a low wall closes the bottom. */
   private terminalPocket(h: number) {
-    const bottom = 0.022;
+    const bottom = 0.012;
     const top = 0.8;
     const pocketH = top - bottom;
     return { x: 0, y: -h / 2 + (bottom + top) / 2, w: 1.46, h: pocketH, r: 0.045, depth: 0.07 };
