@@ -127,9 +127,15 @@ export class Cartridge {
     }
     uv.needsUpdate = true;
 
-    // Positioned slightly above the body center and slightly proud of the recessed rim
-    const labelMesh = this.mesh(geo, this.mats.label, this.spinner, 'cartridge-label');
-    labelMesh.position.set(0, 0.12, d / 2 + 0.003);
+    // Sits clear of the front skin. A few hundredths of a millimetre was inside
+    // the depth bias, so the label vanished into the shell as the card turned.
+    const labelMat = this.mats.label as THREE.MeshPhysicalMaterial;
+    labelMat.polygonOffset = true;
+    labelMat.polygonOffsetFactor = -6;
+    labelMat.polygonOffsetUnits = -6;
+    const labelMesh = this.mesh(geo, labelMat, this.spinner, 'cartridge-label');
+    labelMesh.position.set(0, 0.12, d / 2 + 0.028);
+    labelMesh.renderOrder = 2;
   }
 
   private buildBackDetails() {

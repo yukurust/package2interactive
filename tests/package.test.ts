@@ -189,6 +189,23 @@ describe('molded geometry', () => {
       expect(hit.point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
     }
   });
+
+  it('keeps the cartridge label in front of the shell from angled views', () => {
+    const { card } = rig();
+    card.root.updateMatrixWorld(true);
+    const label = card.root.getObjectByName('cartridge-label') as THREE.Mesh;
+    expect(label.position.z).toBeGreaterThan(CART.d / 2 + 0.02);
+    const ray = new THREE.Raycaster();
+    const target = new THREE.Vector3(0, 0.12, label.position.z);
+    for (const origin of [
+      new THREE.Vector3(0, 0.12, 3),
+      new THREE.Vector3(1.1, 0.85, 2.4),
+      new THREE.Vector3(-0.9, -0.15, 1.8),
+    ]) {
+      ray.set(origin, target.clone().sub(origin).normalize());
+      expect(ray.intersectObject(card.root, true)[0]?.object.name).toBe('cartridge-label');
+    }
+  });
   it('puts front booklet clips inside the lid and leaves a closed-shell clearance', () => {
     const { gameCase } = rig();
     const clip = gameCase.frontPivot.getObjectByName('clip-lip')!;
