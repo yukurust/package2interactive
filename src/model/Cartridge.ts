@@ -5,7 +5,7 @@ import type { CartridgeMaterials } from './materials';
 import { LABEL } from '../art/layout';
 
 /**
- * Procedural game cartridge (inspired by Nintendo Switch game card form factor).
+ * Procedural game cartridge, in the proportions of a handheld-console game card.
  *
  * Details:
  * - Matte dark body with notched edge and bevelled perimeter

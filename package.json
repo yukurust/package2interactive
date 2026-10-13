@@ -2,6 +2,13 @@
   "name": "jacket2site",
   "private": true,
   "version": "0.1.0",
+  "description": "A clear plastic game case. Turn it, open it, and take the cartridge out.",
+  "license": "MIT",
+  "author": "ゆくらす",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yukurust/jacket2site.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
