@@ -1,6 +1,16 @@
 import { expect, it } from 'vitest';
 import * as THREE from 'three';
-import { CASE_TINTS, PlasticSet } from '../src/model/materials';
+import { CASE_TINTS, PlasticSet, makeCartridgeMaterials } from '../src/model/materials';
+
+it('molds the back lettering into the same resin without a painted rectangle', () => {
+  const detail = new THREE.Texture();
+  const { body, back } = makeCartridgeMaterials(new THREE.Texture(), detail);
+  expect(back.map).toBe(detail);
+  expect(back.bumpMap).toBe(detail);
+  expect(back.color.getHex()).toBe(body.color.getHex());
+  expect(back.roughness).toBe(body.roughness);
+  expect(back.clearcoat).toBe(body.clearcoat);
+});
 
 it('tints every clear material and the inner jacket, leaving the sticker neutral', () => {
   const plastic = new PlasticSet({ dispersion: 0 } as any);

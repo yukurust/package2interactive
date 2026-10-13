@@ -63,6 +63,8 @@ export class GameCase {
   readonly cartridgeAnchor = new THREE.Object3D();
   /** Retaining tabs that flex outward when the cartridge is pulled. */
   private readonly tabs: { mesh: THREE.Object3D; baseX: number; dir: number }[] = [];
+  private readonly framingParts: { part: THREE.Object3D; bounds: THREE.Box3 }[] = [];
+  private readonly transformedBounds = new THREE.Box3();
 
   /** 0 = closed, 1 = fully open. */
   open = 0;
@@ -87,6 +89,24 @@ export class GameCase {
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) tag(o, o.userData.part ?? 'case');
     });
+    // Cache geometry bounds in each moving half's local coordinates once.
+    for (const part of [this.backHalf, this.spinePivot, this.frontPivot]) {
+      const bounds = new THREE.Box3();
+      const collect = (node: THREE.Object3D, matrix: THREE.Matrix4) => {
+        for (const child of node.children) {
+          if (child === this.frontPivot) continue;
+          child.updateMatrix();
+          const local = matrix.clone().multiply(child.matrix);
+          if (child instanceof THREE.Mesh) {
+            child.geometry.computeBoundingBox();
+            bounds.union(child.geometry.boundingBox!.clone().applyMatrix4(local));
+          }
+          collect(child, local);
+        }
+      };
+      collect(part, new THREE.Matrix4());
+      this.framingParts.push({ part, bounds });
+    }
     this.update();
   }
 
@@ -370,6 +390,16 @@ export class GameCase {
     const minZ = -T / 2;
     const maxZ = Math.max(T / 2, fz, ez);
     return { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 };
+  }
+
+  /** Conservative envelope, transformed with the user's current rotation. */
+  framingBounds(target: THREE.Box3) {
+    target.makeEmpty();
+    for (const { part, bounds } of this.framingParts) {
+      part.updateWorldMatrix(true, false);
+      target.union(this.transformedBounds.copy(bounds).applyMatrix4(part.matrixWorld));
+    }
+    return target;
   }
 
   /** Apply the current `open` value to hinges and presentation offsets. */

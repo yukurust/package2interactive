@@ -84,6 +84,7 @@ export class ArtworkManager {
     setupTexture(this.innerTexture);
     setupTexture(this.labelTexture);
     setupTexture(this.backDetailTexture);
+    this.backDetailTexture.colorSpace = THREE.NoColorSpace;
 
     this.renderBackMolding();
   }
@@ -497,11 +498,13 @@ export class ArtworkManager {
     const w = this.backDetailCanvas.width;
     const h = this.backDetailCanvas.height;
 
-    ctx.fillStyle = '#1b1b1e';
+    // White leaves the shell's base color unchanged; darker glyphs subtly
+    // shade the recessed lettering without painting a rectangular patch.
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
 
     // Subtle molded text & symbols
-    ctx.fillStyle = '#2d2d34';
+    ctx.fillStyle = '#a0a0a0';
     ctx.font = '600 24px -apple-system, BlinkMacSystemFont, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('LW-001', w / 2, h * 0.35);

@@ -4,6 +4,7 @@ import { prefersReducedMotion } from '../config';
 import type { GameCase } from '../model/GameCase';
 import type { Cartridge } from '../model/Cartridge';
 import type { SceneManager } from '../scene/SceneManager';
+import { inspectionDistance } from '../scene/framing';
 
 export type ViewState = 'closed' | 'open' | 'inspecting';
 const REST = { x: 0.055, y: 0.48 };
@@ -28,6 +29,8 @@ export class InteractionManager {
   private caseOpenTween?: gsap.core.Tween;
   private cartExtractTween?: gsap.core.Tween;
   private viewTween?: gsap.core.Tween;
+  private cartViewTween?: gsap.core.Tween;
+  private readonly bounds = new THREE.Box3();
   /** Orbit captured when the case leaves the closed pose, restored on close. */
   private heldRotX = REST.x;
   private heldRotY = REST.y;
@@ -78,6 +81,7 @@ export class InteractionManager {
       this.lastMoveTime = e.timeStamp;
       this.velX = this.velY = 0;
       this.viewTween?.kill();
+      this.cartViewTween?.kill();
     });
     el.addEventListener('pointermove', (e) => {
       if (e.pointerId !== this.pointerId) return;
@@ -111,10 +115,11 @@ export class InteractionManager {
     el.addEventListener('lostpointercapture', (e) => release(e, true));
     window.addEventListener('keydown', (e) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      if ((e.target as HTMLElement)?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if ((e.target as HTMLElement)?.closest('#panel, input, textarea, select, [contenteditable="true"]')) return;
       if (e.key.toLowerCase() === 'o') this.toggleOpen();
       if (e.key.toLowerCase() === 'r') this.resetView();
       if (e.key.toLowerCase() === 'c') this.toggleInspectCartridge();
+      if (e.key.toLowerCase() === 'f') this.flipCartridge();
       if (e.key === 'Escape' && this.isInspecting) this.dockCartridge();
     });
   }
@@ -224,6 +229,7 @@ export class InteractionManager {
 
   private dockCartridge() {
     this.isInspecting = false;
+    this.cartViewTween?.kill();
     this.cartExtractTween?.kill();
     this.cartExtractTween = gsap.to(this, {
       inspectProgress: 0,
@@ -242,7 +248,10 @@ export class InteractionManager {
 
   resetView() {
     this.velX = this.velY = 0;
-    if (this.isInspecting) this.dockCartridge();
+    if (this.isInspecting) {
+      this.orientCartridge(0);
+      return;
+    }
     this.unwrapYaw();
     if (!this.targetOpen) this.viewHeld = false;
     const x = this.targetOpen ? 0 : REST.x;
@@ -251,6 +260,23 @@ export class InteractionManager {
     this.viewTween = gsap.to(this, {
       targetRotY: y, targetRotX: x,
       duration: this.duration(0.75), ease: 'power2.out',
+    });
+  }
+
+  flipCartridge() {
+    if (!this.isInspecting) return;
+    this.orientCartridge((Math.floor(this.targetCartRotY / Math.PI + 0.5) + 1) * Math.PI);
+  }
+
+  private orientCartridge(y: number) {
+    this.cartViewTween?.kill();
+    if (y === 0) {
+      const yaw = THREE.MathUtils.euclideanModulo(this.cartRotY + Math.PI, Math.PI * 2) - Math.PI;
+      this.cartRotY = this.targetCartRotY = yaw;
+    }
+    this.cartViewTween = gsap.to(this, {
+      targetCartRotX: 0, targetCartRotY: y,
+      duration: this.duration(0.65), ease: 'power2.inOut',
     });
   }
 
@@ -269,7 +295,7 @@ export class InteractionManager {
     this.rotX = THREE.MathUtils.lerp(this.rotX, this.targetRotX, blend);
     this.rotY = THREE.MathUtils.lerp(this.rotY, this.targetRotY, blend);
     this.gameCase.root.rotation.set(this.rotX, this.rotY, 0);
-    this.sm.fitPackage(this.gameCase.open, delta);
+    this.sm.fitPackage(this.gameCase.framingBounds(this.bounds), delta);
     this.cartRotX = THREE.MathUtils.lerp(this.cartRotX, this.targetCartRotX, blend);
     this.cartRotY = THREE.MathUtils.lerp(this.cartRotY, this.targetCartRotY, blend);
 
@@ -278,9 +304,11 @@ export class InteractionManager {
     const t = this.inspectProgress;
     // Lift clear of the retaining tabs before moving toward the camera.
     this.liftPos.set(0, 0, 1.1).applyQuaternion(this.dockQuat).add(this.dockPos);
-    this.inspectPos.set(0, 0.3, -10).applyMatrix4(this.sm.camera.matrixWorld);
+    const distance = inspectionDistance(this.sm.camera.fov, this.sm.camera.aspect);
+    this.inspectPos.set(0, 0, -distance).applyMatrix4(this.sm.camera.matrixWorld);
     this.sm.camera.getWorldQuaternion(this.inspectQuat);
     const travel = THREE.MathUtils.smoothstep(t, 0.22, 1);
+    this.sm.setInspectionProgress(travel, distance);
     this.cartridge.root.position.lerpVectors(this.dockPos, this.liftPos, THREE.MathUtils.smoothstep(t, 0, 0.28));
     this.cartridge.root.position.lerp(this.inspectPos, travel);
     this.cartridge.root.quaternion.slerpQuaternions(this.dockQuat, this.inspectQuat, travel);

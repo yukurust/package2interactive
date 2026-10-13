@@ -29,7 +29,7 @@ function rig() {
   camera.updateMatrixWorld();
   const scene = new THREE.Scene();
   scene.add(gameCase.root);
-  const interaction = new InteractionManager({ canvas, camera, scene, fitPackage() {} } as any, gameCase, card);
+  const interaction = new InteractionManager({ canvas, camera, scene, fitPackage() {}, setInspectionProgress() {} } as any, gameCase, card);
   return { gameCase, card, canvas, interaction, camera };
 }
 
@@ -49,6 +49,25 @@ beforeEach(() => {
 afterEach(() => { gsap.globalTimeline.clear(); vi.unstubAllGlobals(); });
 
 describe('package interactions', () => {
+  it('flips and resets an inspected card without returning it to the holder', () => {
+    const { interaction: c } = rig();
+    c.setOpen(true); c['caseOpenTween']!.progress(1);
+    c.toggleInspectCartridge(); c['cartExtractTween']!.progress(1);
+    c.flipCartridge(); c['cartViewTween']!.progress(1);
+    c.update(1);
+    expect(c['cartRotY']).toBeCloseTo(Math.PI, 4);
+    c.resetView(); c['cartViewTween']!.progress(1);
+    c.update(1);
+    expect(c['cartRotY']).toBeCloseTo(0, 4);
+    expect(c.currentState).toBe('inspecting');
+    expect(c['inspectProgress']).toBe(1);
+    c.flipCartridge();
+    c.setOpen(false);
+    c['cartExtractTween']!.progress(1);
+    c['caseOpenTween']!.progress(1);
+    expect(c.currentState).toBe('closed');
+    expect(c['targetCartRotY']).toBe(0);
+  });
   it('reverses the requested lid state before halfway, even under rapid clicks', () => {
     const { interaction: c, gameCase } = rig();
     c.toggleOpen();

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
 import { SceneManager } from './scene/SceneManager';
-import { PlasticSet, makePaper, makeCartridgeMaterials } from './model/materials';
+import { PlasticSet, makePaper, makeCartridgeMaterials, fresnelUniforms } from './model/materials';
 import { ArtworkManager } from './art/canvasArt';
 import { GameCase } from './model/GameCase';
 import { Cartridge } from './model/Cartridge';
@@ -64,10 +64,25 @@ async function bootstrap() {
       const delta = Math.min(0.05, timer.getDelta());
 
       interaction.update(delta);
-      sm.render();
+      // Keep input/tweens responsive, but stop expensive transmission draws
+      // once the product settles. Texture edits and tint tweens also wake it.
+      const p = cartridge.root.position;
+      const q = cartridge.root.quaternion;
+      const tint = plastic.rim;
+      sm.render([
+        gameCase.open, gameCase.root.rotation.x, gameCase.root.rotation.y,
+        p.x, p.y, p.z, q.x, q.y, q.z, q.w,
+        cartridge.spinner.rotation.x, cartridge.spinner.rotation.y,
+        sm.camera.position.z,
+        tint.color.r, tint.color.g, tint.color.b,
+        tint.attenuationColor.r, tint.attenuationColor.g, tint.attenuationColor.b,
+        tint.attenuationDistance,
+        fresnelUniforms.uEdgeColor.value.r, fresnelUniforms.uEdgeColor.value.g, fresnelUniforms.uEdgeColor.value.b,
+        art.outerTexture.version, art.innerTexture.version, art.labelTexture.version,
+      ]);
     }
 
-    sm.fitPackage(0, 10);
+    interaction.update(10);
     animate();
 
     // Resize handler
