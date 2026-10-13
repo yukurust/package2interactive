@@ -27,7 +27,11 @@ export class InteractionManager {
   private targetCartRotX = 0;
   private caseOpenTween?: gsap.core.Tween;
   private cartExtractTween?: gsap.core.Tween;
-  private resetTween?: gsap.core.Tween;
+  private viewTween?: gsap.core.Tween;
+  /** Orbit captured when the case leaves the closed pose, restored on close. */
+  private heldRotX = REST.x;
+  private heldRotY = REST.y;
+  private viewHeld = false;
   private inspectProgress = 0;
   private isInspecting = false;
   private targetOpen = false;
@@ -73,7 +77,7 @@ export class InteractionManager {
       this.lastPointer.copy(this.pointerStart);
       this.lastMoveTime = e.timeStamp;
       this.velX = this.velY = 0;
-      this.resetTween?.kill();
+      this.viewTween?.kill();
     });
     el.addEventListener('pointermove', (e) => {
       if (e.pointerId !== this.pointerId) return;
@@ -92,6 +96,7 @@ export class InteractionManager {
         this.targetRotX = THREE.MathUtils.clamp(this.targetRotX + dy * 0.007, -TILT_LIMIT, TILT_LIMIT);
         this.velY = THREE.MathUtils.clamp(dx * 0.007 / dt, -4, 4);
         this.velX = THREE.MathUtils.clamp(dy * 0.007 / dt, -3, 3);
+        if (!this.targetOpen) this.viewHeld = false;
       }
     });
     const release = (e: PointerEvent, cancelled: boolean) => {
@@ -139,22 +144,67 @@ export class InteractionManager {
   }
 
   setOpen(open: boolean) {
+    const changed = open !== this.targetOpen;
     this.targetOpen = open;
     this.caseOpenTween?.kill();
-    if (!open && (this.isInspecting || this.inspectProgress > 0)) this.dockCartridge();
+    const docking = !open && (this.isInspecting || this.inspectProgress > 0);
+    if (docking) this.dockCartridge();
     else this.animateLid();
+    if (changed && open) this.presentOpen();
+    else if (changed && !open && !docking) this.presentClosed();
     this.onStateChange?.(this.currentState);
+  }
+
+  private lidSeconds() {
+    const span = Math.abs(Number(this.targetOpen) - this.gameCase.open);
+    return (this.targetOpen ? 1.1 : 0.9) * span;
   }
 
   private animateLid() {
     this.caseOpenTween?.kill();
     this.caseOpenTween = gsap.to(this.gameCase, {
       open: this.targetOpen ? 1 : 0,
-      duration: this.duration((this.targetOpen ? 1.1 : 0.9) * Math.abs(Number(this.targetOpen) - this.gameCase.open)),
+      duration: this.duration(this.lidSeconds()),
       ease: 'power2.inOut',
       onUpdate: () => this.gameCase.update(),
       onComplete: () => this.onStateChange?.(this.currentState),
     });
+  }
+
+  /** Shortest equivalent yaw, so the next turn does not unwind extra revolutions. */
+  private unwrapYaw() {
+    const yaw = THREE.MathUtils.euclideanModulo(this.rotY + Math.PI, Math.PI * 2) - Math.PI;
+    this.rotY = this.targetRotY = yaw;
+  }
+
+  private orientView(x: number, y: number, onComplete?: () => void) {
+    this.velX = this.velY = 0;
+    this.viewTween?.kill();
+    this.viewTween = gsap.to(this, {
+      targetRotX: x,
+      targetRotY: y,
+      duration: this.duration(this.lidSeconds()),
+      ease: 'power2.inOut',
+      onComplete,
+    });
+  }
+
+  /** Turn so the opening's center, which the case aims at local +Z, faces the camera. */
+  private presentOpen() {
+    if (!this.viewHeld) {
+      this.unwrapYaw();
+      this.heldRotX = this.targetRotX;
+      this.heldRotY = this.targetRotY;
+      this.viewHeld = true;
+    }
+    this.orientView(0, 0);
+  }
+
+  private presentClosed() {
+    this.unwrapYaw();
+    const x = this.viewHeld ? this.heldRotX : REST.x;
+    const y = this.viewHeld ? this.heldRotY : REST.y;
+    this.orientView(x, y, () => { this.viewHeld = false; });
   }
 
   toggleInspectCartridge() {
@@ -181,7 +231,10 @@ export class InteractionManager {
       ease: 'power2.inOut',
       onComplete: () => {
         this.cartRotX = this.cartRotY = this.targetCartRotX = this.targetCartRotY = 0;
-        if (!this.targetOpen) this.animateLid();
+        if (!this.targetOpen) {
+          this.animateLid();
+          this.presentClosed();
+        }
       },
     });
     this.onStateChange?.(this.currentState);
@@ -190,11 +243,13 @@ export class InteractionManager {
   resetView() {
     this.velX = this.velY = 0;
     if (this.isInspecting) this.dockCartridge();
-    this.resetTween?.kill();
-    // Choose the closest equivalent angle instead of rewinding multiple turns.
-    this.targetRotY = this.rotY = THREE.MathUtils.euclideanModulo(this.rotY + Math.PI, Math.PI * 2) - Math.PI;
-    this.resetTween = gsap.to(this, {
-      targetRotY: REST.y, targetRotX: REST.x,
+    this.unwrapYaw();
+    if (!this.targetOpen) this.viewHeld = false;
+    const x = this.targetOpen ? 0 : REST.x;
+    const y = this.targetOpen ? 0 : REST.y;
+    this.viewTween?.kill();
+    this.viewTween = gsap.to(this, {
+      targetRotY: y, targetRotX: x,
       duration: this.duration(0.75), ease: 'power2.out',
     });
   }

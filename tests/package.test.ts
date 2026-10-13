@@ -118,6 +118,29 @@ describe('package interactions', () => {
     expect(simulate(30)).toBeCloseTo(simulate(120), 4);
   });
 
+  it('faces the open center forward, then restores the angle when it closes', () => {
+    const { interaction: c, gameCase } = rig();
+    c['rotY'] = c['targetRotY'] = 1.1;
+    c['rotX'] = c['targetRotX'] = 0.3;
+    c.setOpen(true);
+    c['caseOpenTween']!.progress(1);
+    c['viewTween']!.progress(1);
+    c.update(1);
+    gameCase.root.updateMatrixWorld(true);
+    const center = new THREE.Vector3(Math.sin(DIM.openAngle), 0, 1 - Math.cos(DIM.openAngle)).normalize();
+    center.applyQuaternion(gameCase.presenter.getWorldQuaternion(new THREE.Quaternion()));
+    expect(center.x).toBeCloseTo(0, 2);
+    expect(center.y).toBeCloseTo(0, 2);
+    expect(center.z).toBeCloseTo(1, 2);
+
+    c.setOpen(false);
+    c['caseOpenTween']!.progress(1);
+    c['viewTween']!.progress(1);
+    c.update(1);
+    expect(gameCase.root.rotation.y).toBeCloseTo(1.1, 2);
+    expect(gameCase.root.rotation.x).toBeCloseTo(0.3, 2);
+  });
+
   it('uses a camera-relative inspection destination after responsive camera moves', () => {
     const { interaction: c, camera, card } = rig();
     c.setOpen(true); c['caseOpenTween']!.progress(1);
