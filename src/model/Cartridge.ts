@@ -52,11 +52,9 @@ export class Cartridge {
     const arrow = this.arrowMark(h);
     const well = label.depth;
 
-    const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08, {
-      w: terminal.w,
-      top: terminal.y + terminal.h / 2,
-    });
+    const body = cartridgeShape(w, h, r, 0.45, 0.55, 0.08);
     this.addHole(body, grip);
+    this.addHole(body, terminal);
     this.mesh(this.extrudeCard(body, -d / 2, d - well), this.mats.body, this.spinner, 'cartridge-body');
 
     const gripFloor = this.mesh(
@@ -154,21 +152,19 @@ export class Cartridge {
     const floorZ = -d / 2 + terminal.depth;
     const goldZ = floorZ - 0.012;
 
-    const winTop = terminal.y + terminal.h / 2;
-    const winBottom = -h / 2;
     const win = this.mesh(
-      this.plate(terminal.w, winTop - winBottom, 0.02),
+      this.plate(terminal.w + 0.1, terminal.h + 0.1, terminal.r),
       this.mats.window,
       this.spinner,
       'back-window',
     );
     win.rotation.y = Math.PI;
-    win.position.set(terminal.x, (winTop + winBottom) / 2, floorZ);
+    win.position.set(terminal.x, terminal.y, floorZ);
 
-    // Gold keeps its top edge and runs past the open insertion edge.
+    // Gold keeps its top edge. A low plastic wall stays under it, so the bottom stays closed.
     const stripW = terminal.w - 0.1;
     const goldTop = terminal.y + terminal.h / 2 - 0.04;
-    const goldBottom = terminal.y - terminal.h / 2;
+    const goldBottom = -h / 2 + 0.03;
     const stripH = goldTop - goldBottom;
     const goldY = (goldTop + goldBottom) / 2;
     const contactsGeo = new THREE.PlaneGeometry(stripW, stripH);
@@ -187,9 +183,7 @@ export class Cartridge {
     const pinSpacing = stripW / numPins;
     const toothOuterZ = -d / 2 + 0.016;
     const toothDepth = goldZ + 0.004 - toothOuterZ;
-    const toothBottom = -h / 2;
-    const toothH = goldTop - toothBottom;
-    const toothGeo = new THREE.BoxGeometry(toothW, toothH, toothDepth);
+    const toothGeo = new THREE.BoxGeometry(toothW, stripH, toothDepth);
     for (let i = 1; i < numPins; i++) {
       const tooth = this.mesh(
         toothGeo,
@@ -199,7 +193,7 @@ export class Cartridge {
       );
       tooth.position.set(
         -stripW / 2 + i * pinSpacing,
-        (goldTop + toothBottom) / 2,
+        goldY,
         toothOuterZ + toothDepth / 2,
       );
     }
@@ -231,9 +225,9 @@ export class Cartridge {
     return { x: 0, y: h / 2 - 0.12, w: w * 0.72, h: 0.1, r: 0.032, depth: 0.06 };
   }
 
-  /** Contact window on the back. The top stays put; the bottom passes the insertion edge. */
+  /** Contact window on the back. The top stays put; a low wall closes the bottom. */
   private terminalPocket(h: number) {
-    const bottom = -0.03;
+    const bottom = 0.022;
     const top = 0.8;
     const pocketH = top - bottom;
     return { x: 0, y: -h / 2 + (bottom + top) / 2, w: 1.46, h: pocketH, r: 0.045, depth: 0.07 };

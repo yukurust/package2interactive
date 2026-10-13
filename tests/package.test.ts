@@ -183,12 +183,12 @@ describe('molded geometry', () => {
     expect(gold!.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
     const goldMesh = card.root.getObjectByName('cartridge-contacts') as THREE.Mesh;
     const goldBox = parentBox(goldMesh);
-    expect(goldBox.min.y).toBeLessThan(-CART.h / 2);
-    expect(goldBox.min.y).toBeGreaterThan(-CART.h / 2 - 0.05);
-    ray.set(new THREE.Vector3(0.08, -CART.h / 2 + 0.02, -1), new THREE.Vector3(0, 0, 1));
-    const mouthHit = ray.intersectObject(card.root, true)[0];
-    expect(mouthHit.object.name).toBe('cartridge-contacts');
-    expect(mouthHit.point.z).toBeGreaterThan(-CART.d / 2 + 0.02);
+    expect(goldBox.min.y).toBeGreaterThan(-CART.h / 2 + 0.02);
+    expect(goldBox.min.y).toBeLessThan(-CART.h / 2 + 0.04);
+    ray.set(new THREE.Vector3(0, -CART.h / 2 + 0.01, -1), new THREE.Vector3(0, 0, 1));
+    const wallHit = ray.intersectObject(card.root, true)[0];
+    expect(wallHit.object.name).toBe('cartridge-body');
+    expect(wallHit.point.z).toBeCloseTo(-CART.d / 2, 1);
     expect(backHits[0].point.z).toBeGreaterThan(-CART.d / 2 + 0.01);
     expect(new THREE.Vector3(0, 0, 1).applyEuler(gold!.object.rotation).z).toBeCloseTo(-1);
 
