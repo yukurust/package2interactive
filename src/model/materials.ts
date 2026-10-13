@@ -104,8 +104,8 @@ function makeClear(q: Quality, o: PlasticOptions) {
 }
 
 /**
- * Structural plastic is tinted independently of the optically clear windows
- * and jacket film, preserving the color of the printed artwork.
+ * Structural plastic takes the full case tint. Interior panels carry a light
+ * tint over the inner artwork; the exterior jacket film stays colorless.
  */
 export class PlasticSet {
   readonly panel: THREE.MeshPhysicalMaterial;
@@ -154,6 +154,12 @@ export class PlasticSet {
       m.attenuationColor.copy(a);
       m.attenuationDistance = d;
     }
+    // The molded floor sits in front of the inner print, but behind the
+    // opaque exterior jacket. Diluted absorption gives the inside a subtle
+    // colored-resin layer without recoloring the outside cover or its film.
+    this.panel.color.set('#ffffff').lerp(c, 0.12);
+    this.panel.attenuationColor.set('#ffffff').lerp(a, 0.42);
+    this.panel.attenuationDistance = 1.5;
     fresnelUniforms.uEdgeColor.value.set(from.edge).lerp(new THREE.Color(to.edge), t);
   }
 
