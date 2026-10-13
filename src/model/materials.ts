@@ -201,25 +201,36 @@ export class PlasticSet {
 /* -------------------------------------------------------------------------- */
 
 export function makePaper(map: THREE.Texture, inner = false) {
-  return new THREE.MeshStandardMaterial({
+  return new THREE.MeshPhysicalMaterial({
     map,
     roughness: inner ? 0.85 : 0.62,
     color: 0xffffff,
     metalness: 0,
     envMapIntensity: inner ? 0.55 : 0.65,
+    // Preserve the established exterior-print layering, but give the jacket
+    // a restrained laminate sheen as it crosses a studio strip light.
+    clearcoat: inner ? 0 : 0.32,
+    clearcoatRoughness: 0.28,
   });
 }
 
 export function makeCartridgeMaterials(label: THREE.Texture, back: THREE.Texture) {
+  const body = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#141417'),
+    roughness: 0.42,
+    metalness: 0,
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.35,
+    envMapIntensity: 1.0,
+  });
+  // Molded lettering shares the shell's resin. The white map background leaves
+  // it untouched; only recessed glyphs receive subtle shading and bump detail.
+  const molded = body.clone();
+  molded.map = back;
+  molded.bumpMap = back;
+  molded.bumpScale = 0.018;
   return {
-    body: new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#141417'),
-      roughness: 0.42,
-      metalness: 0,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.35,
-      envMapIntensity: 1.0,
-    }),
+    body,
     ridge: new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#1b1b1f'),
       roughness: 0.3,
@@ -234,13 +245,7 @@ export function makeCartridgeMaterials(label: THREE.Texture, back: THREE.Texture
       clearcoatRoughness: 0.06,
       envMapIntensity: 0.9,
     }),
-    back: new THREE.MeshStandardMaterial({
-      map: back,
-      bumpMap: back,
-      bumpScale: 0.035,
-      roughness: 0.58,
-      metalness: 0,
-    }),
+    back: molded,
     window: new THREE.MeshStandardMaterial({ color: '#08080a', roughness: 0.7 }),
     contacts: new THREE.MeshStandardMaterial({
       color: new THREE.Color('#e2b257'),

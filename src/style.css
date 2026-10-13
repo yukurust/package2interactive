@@ -538,7 +538,7 @@ html, body {
 /* Author display rules must never override native disclosure state. */
 [hidden] { display: none !important; }
 
-.stage { inset: 78px 0 140px; }
+.stage { inset: 78px 0 164px; }
 .corner { top: 28px; left: 32px; }
 .brand { font-size: 14px; letter-spacing: -0.025em; }
 .tag { margin-top: 3px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -575,7 +575,7 @@ html, body {
   .panel { max-height: calc(100dvh - 185px); }
 }
 @media (max-height: 540px) {
-  .stage { inset: 55px 0 95px; }
+  .stage { inset: 55px 0 126px; }
   .hint { display: none; }
   .dock { bottom: 12px; }
   .inspector { bottom: 74px; }
@@ -591,3 +591,28 @@ html, body {
 @media (max-width: 360px) { .tag { max-width: 165px; line-height: 1.6; } .edition { font-size: 7px; } }
 .inspector button:disabled { opacity: 0.45; cursor: default; }
 .inspector button:focus-visible { outline: 2px solid #3b6076; outline-offset: 3px; }
+
+/* Keep a live preview beside the editor, and above its mobile sheet. */
+.app[data-customizing] .stage { right: 380px; }
+.panel-head { position: sticky; top: -18px; background: var(--panel-bg); z-index: 1; padding: 8px 0; }
+.close { width: 36px; height: 36px; }
+.panel { overscroll-behavior: contain; scrollbar-width: thin; }
+.inspector button { min-height: 44px; }
+#btn-flip { background: transparent; }
+@media (max-width: 640px) {
+  .app[data-customizing] .stage { right: 0; bottom: calc(46dvh + 102px); }
+  .app[data-customizing] .inspector, .app[data-customizing] .hint { visibility: hidden; }
+  .panel { max-height: 46dvh; }
+  .field input[type='text'] { font-size: 16px; }
+  .swatch { width: 36px; height: 36px; }
+  .inspector { white-space: nowrap; gap: 6px; }
+  .inspector button { padding: 8px 12px; }
+}
+@media (max-height: 540px) and (min-width: 641px) {
+  .app[data-customizing] .stage { right: 360px; }
+  .panel { width: 320px; }
+}
+@media (max-height: 540px) and (min-width: 480px) and (max-width: 640px) {
+  .app[data-customizing] .stage { right: calc(52vw + 32px); bottom: 126px; }
+  .panel { top: 12px; bottom: auto; left: auto; width: 52vw; max-height: calc(100dvh - 90px); }
+}

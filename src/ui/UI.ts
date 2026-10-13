@@ -159,6 +159,7 @@ export class UIManager {
       }
     });
     document.getElementById('btn-inspect')!.addEventListener('click', () => this.interaction.toggleInspectCartridge());
+    document.getElementById('btn-flip')!.addEventListener('click', () => this.interaction.flipCartridge());
 
     // Form live updates
     const onInput = () => {
@@ -272,9 +273,15 @@ export class UIManager {
 
   private setPanel(open: boolean) {
     this.panel.hidden = !open;
+    document.getElementById('app')!.toggleAttribute('data-customizing', open);
     this.btnEdit.setAttribute('aria-expanded', String(open));
-    if (open) this.inTitle.focus();
-    else this.btnEdit.focus();
+    if (open) {
+      this.colorPop.hidden = true;
+      this.btnColor.setAttribute('aria-expanded', 'false');
+      // Opening the editor on touch must not immediately cover the preview
+      // with the software keyboard.
+      (window.matchMedia('(pointer: coarse)').matches ? this.panelClose : this.inTitle).focus({ preventScroll: true });
+    } else this.btnEdit.focus({ preventScroll: true });
   }
 
   private clearUploads() {
@@ -309,7 +316,10 @@ export class UIManager {
     this.btnOpen.title = `${label} (O)`;
     this.hint.textContent = state === 'closed' ? 'Drag to turn · Tap the case to open'
       : state === 'open' ? 'Drag to turn · Tap the cartridge to inspect'
-      : 'Drag to flip · Tap to return';
+      : 'Drag to turn · Flip to see the contacts';
+    document.getElementById('btn-flip')!.hidden = state !== 'inspecting';
+    this.btnReset.setAttribute('aria-label', state === 'inspecting' ? 'Reset cartridge view' : 'Reset view');
+    this.btnReset.title = state === 'inspecting' ? 'Reset cartridge view (R)' : 'Reset view (R)';
     document.getElementById('inspector')!.hidden = state === 'closed';
     const inspect = document.getElementById('btn-inspect') as HTMLButtonElement;
     inspect.textContent = state === 'inspecting' ? 'Return cartridge ↩' : 'Inspect cartridge ↗';

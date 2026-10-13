@@ -25,7 +25,10 @@
       </header>
 
       <div class="edition"><span id="edition-title">LUMIWARD</span><br />COLLECTOR’S EDITION / 001</div>
-      <div class="inspector" id="inspector" hidden><button id="btn-inspect" type="button">Inspect cartridge ↗</button></div>
+      <div class="inspector" id="inspector" hidden>
+        <button id="btn-flip" type="button" hidden title="Flip cartridge (F)">Flip card ↻</button>
+        <button id="btn-inspect" type="button">Inspect cartridge ↗</button>
+      </div>
 
       <p class="hint" id="hint" aria-live="polite">Drag to turn · Tap the case to open</p>
 
@@ -47,12 +50,12 @@
         <div class="rail" id="rail" role="group" aria-label="Change artwork"></div>
         <span class="divider" aria-hidden="true"></span>
         <div class="pop-anchor">
-          <button class="tool" id="btn-color" type="button" title="Case color" aria-label="Case color" aria-expanded="false">
+          <button class="tool" id="btn-color" type="button" title="Case color" aria-label="Case color" aria-expanded="false" aria-controls="color-pop">
             <span class="dot" id="color-dot"></span>
           </button>
           <div class="popover" id="color-pop" hidden role="group" aria-label="Case colors"></div>
         </div>
-        <button class="tool" id="btn-edit" type="button" title="Customize & upload (E)" aria-label="Customize package" aria-expanded="false">
+        <button class="tool" id="btn-edit" type="button" title="Customize & upload (E)" aria-label="Customize package" aria-expanded="false" aria-controls="panel">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 15.5V4.5" />
             <path d="m7.5 9 4.5-4.5L16.5 9" />
