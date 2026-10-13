@@ -1,70 +1,178 @@
-# ゲームパッケージ
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![three.js](https://img.shields.io/badge/three.js-r186-black.svg)](https://threejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF.svg)](https://vite.dev/)
 
-透明なプラスチックのゲームケースを WebGL で描いています。光は殻を通り抜け、紙のジャケットは薄いフィルムの下にあり、カートリッジはツメから浮いて手前に出てきます。裏返せます。
+# Interactive Game Case
 
-[three.js](https://threejs.org) と Vite。形はすべてコードで組んでいて、読み込む 3D モデルはありません。
+**ゲームパッケージを、ブラウザの中で手に取る。**
 
-開き方と光の扱い方は、Ann Nguyen の [CD Case](https://www.bubbbly.com/cd-case)（[ソース](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case)）を参考にしています。
+透明なプラスチックケースの質感から、ジャケットの印刷、カートリッジの着脱まで。ゲームソフトのパッケージをインタラクティブな3D体験として再現したWebアプリケーションです。
 
-## 開いたときの見た目
+ケースを回転させたり、開いて中を覗いたり、カートリッジを取り出して裏返したり。実物のゲームパッケージに触れるような操作を、ブラウザ上で楽しめます。
 
-起動すると、閉じたケースが画面の中央に出ます。表紙は薄いフィルムの下にあり、下のドックから別の作品や樹脂の色へ切り替えられます。
+[three.js](https://threejs.org/) と Vite を使用し、3Dモデルを読み込まず、すべての形状をコードから生成しています。
 
-![閉じたゲームケース。表紙は LUMIWARD で、下に操作ドックがある](docs/closed.jpg)
+> Inspired by [CD Case](https://www.bubbbly.com/cd-case) by Ann Nguyen.
 
-## 操作
+## Preview
 
-| 操作 | 起こること |
+![ゲームケースのプレビュー](docs/closed.jpg)
+
+透明なカバー越しに見えるジャケット、光を反射するプラスチックの縁、ケース内部に収まるカートリッジ。素材の質感や細部の構造にもこだわっています。
+
+### Open the Case
+
+![開いたゲームケース](docs/open.jpg)
+
+ケースを開くと、内側のアートワークとカートリッジが現れます。
+
+ヒンジの構造やケース同士の干渉を考慮し、自然な開閉アニメーションを実装しています。
+
+### Inspect the Cartridge
+
+![取り出したカートリッジ](docs/cartridge.jpg)
+
+カートリッジはケースから取り外して、自由に回転させることができます。
+
+![カートリッジの裏面](docs/cartridge-back.jpg)
+
+裏返すと、背面の形状や金色の接続端子まで確認できます。
+
+## Features
+
+- **Interactive 3D** — ドラッグやスワイプによる直感的な回転操作
+- **Case Animation** — ヒンジ構造を再現したケースの開閉
+- **Removable Cartridge** — カートリッジの着脱と360°の回転操作
+- **Realistic Materials** — 透過・屈折・反射を組み合わせたプラスチック表現
+- **Custom Artwork** — タイトルや画像を変更できるエディター
+- **Visual Presets** — ジャケットデザインやケースカラーの切り替え
+- **Procedural Geometry** — 外部の3Dモデルに依存しない形状生成
+
+## Controls
+
+マウス・タッチ操作に加え、キーボードショートカットにも対応しています。
+
+| 操作 | アクション |
 | --- | --- |
-| ドラッグ、またはスワイプ | ケースを回す |
-| ケースをタップ、または **O** | 開く、または閉じる |
-| カートリッジをタップ、または **C** | 取り出す、または戻す |
-| **F** | 検査中のカートリッジを裏返す |
-| **R** | 向きを戻す |
-| **E** | タイトルと画像を編集する |
-| **Escape** | カートリッジを戻す、または編集を閉じる |
+| ドラッグ / スワイプ | ケースを回転 |
+| ケースをクリック / `O` | ケースを開く・閉じる |
+| カートリッジをクリック / `C` | カートリッジを取り出す・戻す |
+| `F` | 取り出したカートリッジを裏返す |
+| `R` | ケースの向きをリセット |
+| `E` | アートワークエディターを開く |
+| `Esc` | カートリッジを戻す / エディターを閉じる |
 
-ケースをタップするか **O** を押すと、カバーが開いて中の見開きとカートリッジが見えます。
+画面下部のコントロールドックから、作品のプリセットやケースのカラーを変更できます。
 
-![開いたケース。透明なカバーの内側に絵があり、右にカートリッジが収まっている](docs/open.jpg)
+### Customize Your Package
 
-開いた状態でカートリッジをタップするか **C** を押すと、手前に浮き上がります。
+`E` キーでエディターを開くと、タイトルや画像を自由に変更できます。
 
-![取り出したカートリッジの表面。ラベルに LUMIWARD と書かれている](docs/cartridge.jpg)
+取り込んだ画像はブラウザ内でテクスチャとして処理され、外部サーバーへのアップロードは行いません。
 
-検査中に **F** を押すと裏返し、金の端子が見えます。ドラッグで向きを変えられます。
+オリジナルのゲームパッケージを作成したり、アートワークのモックアップとして活用したりできます。
 
-![カートリッジの裏面。下端に金の端子が並んでいる](docs/cartridge-back.jpg)
+## Getting Started
 
-手持ちの画像は **E** から入れます。ブラウザの中だけでテクスチャになり、外には出ません。
+### Requirements
 
-## 動かし方
+- Node.js
+- npm
+- WebGLに対応したブラウザ
+
+### Installation
+
+リポジトリをクローンし、依存パッケージをインストールして開発サーバーを起動します。
 
 ```bash
-npm install && npm run dev
+npm install
+npm run dev
 ```
 
-Vite が示した URL を開きます。通常は http://localhost:5173 です。
+起動後、Viteが表示するローカルURLにアクセスしてください。
+
+通常は `http://localhost:5173` で確認できます。
+
+### Test & Build
 
 ```bash
+# テストを実行
 npm test
+
+# プロダクションビルド
 npm run build
 ```
 
-## 仕組み
+## Technical Details
 
-**プラスチック。** [`src/model/GameCase.ts`](src/model/GameCase.ts) と [`src/model/shapes.ts`](src/model/shapes.ts) が、ミリメートル単位でケースを組んでいます（1 ユニット = 10 mm。およそ 170 × 105 × 11 mm）。各シェルの縁はヒンジ側が開いた C 字で、閉じると背表紙のシールがその隙間に入ります。開く角度は二つの軸で半分ずつ分かれ、カバー同士はぶつかりません。
+このプロジェクトでは、three.jsによるリアルタイムレンダリングと、コードベースの形状生成を組み合わせています。
 
-**光。** [`src/scene/lighting.ts`](src/scene/lighting.ts) が、ソフトボックスを置いた小さな部屋を一度キューブマップに焼きます。[`src/model/materials.ts`](src/model/materials.ts) は透過と屈折、クリアコートに `MeshPhysicalMaterial` を使い、厚い成形縁で光が走るフレネルを短い GLSL で足しています。
+### Geometry — ケースの構造
 
-**動き。** [`src/interaction/InteractionManager.ts`](src/interaction/InteractionManager.ts) が、経過時間で慣性を付けてケースを回し、開閉は GSAP です。カートリッジは固定ツメを押し広げてから手前へ出ます。[`src/scene/framing.ts`](src/scene/framing.ts) は、回転しても、編集パネルが開いても、角が画面から切れない距離にカメラを置きます。
+**関連ファイル**
+- [`src/model/GameCase.ts`](src/model/GameCase.ts)
+- [`src/model/shapes.ts`](src/model/shapes.ts)
 
-**印刷。** [`src/art/canvasArt.ts`](src/art/canvasArt.ts) が、表紙・見開き・ラベルをキャンバスに描いてテクスチャにします。作品のプリセットは [`src/art/presets.ts`](src/art/presets.ts) です。
+ケースの形状は、外部の3Dモデルを使用せずにコードから生成しています。
 
-## クレジット
+実物の寸法を意識した設計で、1ユニットを10mmとして扱い、ケース全体のサイズは約170 × 105 × 11mmです。
 
-このケースは ゆくらす が作っています。
+ケースの縁にはヒンジ側が開いたC字型の構造を採用。閉じた際には、その隙間に背表紙部分が収まるよう設計しています。
 
-光の通し方とケースの開き方は、Ann Nguyen（[@ann_nnng](https://x.com/ann_nnng)）の [CD Case](https://www.bubbbly.com/cd-case) を参考にしています。ソースは [vibe-coding / cd-case](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case) で、[TypingMind](https://typingmind.com) を使って作られた作品です。ここから学ぶときは、元のページへリンクを戻してください。
+また、開閉時の回転を2つの軸に分散させることで、カバー同士の干渉を防いでいます。
 
-このリポジトリのコードは [MIT](LICENSE) です。
+### Materials & Lighting — 透明感とライティング
+
+**関連ファイル**
+- [`src/model/materials.ts`](src/model/materials.ts)
+- [`src/scene/lighting.ts`](src/scene/lighting.ts)
+
+透明なプラスチック特有の質感を表現するため、three.jsの `MeshPhysicalMaterial` を使用しています。
+
+透過・屈折・クリアコートを組み合わせ、さらにGLSLによるフレネル表現を追加することで、成形されたプラスチックの縁に生じる光の反射を再現しています。
+
+ライティングには、ソフトボックスを配置した仮想空間から生成したキューブマップを使用しています。
+
+### Interaction & Animation — 操作とアニメーション
+
+**関連ファイル**
+- [`src/interaction/InteractionManager.ts`](src/interaction/InteractionManager.ts)
+- [`src/scene/framing.ts`](src/scene/framing.ts)
+
+ドラッグ操作には経過時間に基づく慣性を実装し、ケースを自然に回転させられるようにしています。
+
+ケースの開閉にはGSAPを使用。カートリッジを取り出す際には、固定用のツメが広がってから本体が手前に移動するアニメーションを実装しています。
+
+カメラ位置はケースの向きやエディターの表示状態に応じて調整され、操作中もオブジェクトが画面内に収まるよう制御しています。
+
+### Artwork & Textures — アートワークの生成
+
+**関連ファイル**
+- [`src/art/canvasArt.ts`](src/art/canvasArt.ts)
+- [`src/art/presets.ts`](src/art/presets.ts)
+
+ジャケットやカートリッジのラベルには、Canvas APIで生成したテクスチャを使用しています。
+
+プリセットによるデザインの切り替えに加え、ユーザーが用意した画像やタイトルを反映することもできます。
+
+## Inspiration & Credits
+
+**Created by ゆくらす**
+
+本プロジェクトは、Ann Nguyen（[@ann_nnng](https://x.com/ann_nnng)）による [CD Case](https://www.bubbbly.com/cd-case) からインスピレーションを得て制作しました。
+
+特に、透明素材のライティング表現やケースの開閉構造を参考にしています。
+
+オリジナル作品のソースコードはこちらから確認できます。
+
+- [CD Case — Live Demo](https://www.bubbbly.com/cd-case)
+- [CD Case — Source Code](https://github.com/annnguyentt/vibe-coding/tree/main/cd-case)
+
+オリジナルのCD Caseは、[TypingMind](https://typingmind.com) を活用して制作された作品です。
+
+素晴らしい作品と、その実装を公開してくださったAnn Nguyen氏に感謝します。
+
+## License
+
+本リポジトリのコードは [MIT License](LICENSE) のもとで公開しています。
