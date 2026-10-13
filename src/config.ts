@@ -22,20 +22,25 @@ export const DIM = {
   panel: 0.1,
   /** Perimeter rim wall thickness. */
   rim: 0.085,
-  /** Back tray depth, measured from its outer surface to the rim top. */
-  rimBack: 0.62,
-  /** Front cover depth, measured from its outer surface to the rim bottom. */
-  rimFront: 0.46,
+  /**
+   * Back shell depth, outer face to the parting lip.
+   * Equal to the front so the split sits on the mid-plane (0.02 of clearance, centered).
+   */
+  rimBack: 0.54,
+  /** Front shell depth, outer face to the parting lip. */
+  rimFront: 0.54,
   /** Corner radius at the opening edge. */
   rOpen: 0.44,
   /** Corner radius at the hinge edge. */
   rHinge: 0.16,
+  /** Radius of the two long spine shoulders (≈ 1.6 mm). */
+  rSpine: 0.16,
   /** Outer clear sleeve (film holding the paper jacket). */
   sleeve: 0.024,
   /** Space reserved for the paper jacket between panel and sleeve. */
   paperGap: 0.012,
   /** Inset of the printed paper from the plastic edge. */
-  paperInset: 0.05,
+  paperInset: 0.18,
   /** Fully-open hinge angle. */
   openAngle: 140 * DEG,
 } as const;
@@ -53,10 +58,7 @@ export type Tier = 'high' | 'low';
 export interface Quality {
   tier: Tier;
   maxDpr: number;
-  minDpr: number;
   transmissionScale: number;
-  shadowRes: number;
-  shadowEveryNthFrame: number;
   /** Pixels per world unit for the printed jacket canvas. */
   artPx: number;
   dispersion: number;
@@ -76,21 +78,15 @@ export function detectQuality(): Quality {
     ? {
         tier,
         maxDpr: 2,
-        minDpr: 1,
         transmissionScale: 1,
-        shadowRes: 512,
-        shadowEveryNthFrame: 1,
         artPx: 120,
-        dispersion: 0.12,
+        dispersion: 0.025,
         anisotropy: 8,
       }
     : {
         tier,
         maxDpr: 1.75,
-        minDpr: 1,
         transmissionScale: 0.6,
-        shadowRes: 256,
-        shadowEveryNthFrame: 2,
         artPx: 92,
         dispersion: 0,
         anisotropy: 4,

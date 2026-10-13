@@ -138,7 +138,7 @@ export class Cartridge {
     const winD = 0.04;
     const winGeo = new RoundedBoxGeometry(winW, winH, winD, 2, 0.02);
     const win = this.mesh(winGeo, this.mats.window, this.spinner, 'back-window');
-    win.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 + winD / 2);
+    win.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 - winD / 2);
 
     // Gold contact pins strip inside the recessed window
     const stripW = winW - 0.08;
@@ -151,7 +151,7 @@ export class Cartridge {
       'cartridge-contacts',
     );
     contacts.rotation.y = Math.PI;
-    contacts.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 + 0.008);
+    contacts.position.set(0, -h / 2 + winH / 2 + 0.12, -d / 2 - winD - 0.003);
 
     // Separating teeth / plastic dividers over the contacts
     const numPins = 8;
@@ -168,7 +168,7 @@ export class Cartridge {
       tooth.position.set(
         -stripW / 2 + i * pinSpacing,
         -h / 2 + winH / 2 + 0.12,
-        -d / 2 + 0.015,
+        -d / 2 - winD - 0.012,
       );
     }
 

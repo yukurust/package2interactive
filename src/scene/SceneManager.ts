@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { detectQuality, type Quality } from '../config';
+import { detectQuality, prefersReducedMotion, type Quality } from '../config';
 import { StudioLighting } from './lighting';
 
 export class SceneManager {
@@ -12,7 +12,6 @@ export class SceneManager {
 
   private width = 0;
   private height = 0;
-  private frameCount = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -34,16 +33,13 @@ export class SceneManager {
     });
 
     this.renderer.toneMapping = THREE.NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMappingExposure = 1;
 
     // Transmission pass resolution
-    (this.renderer as unknown as { transmissionResolutionScale: number }).transmissionResolutionScale =
-      this.quality.transmissionScale;
+    this.renderer.transmissionResolutionScale = this.quality.transmissionScale;
 
     // Lighting
-    this.lighting = new StudioLighting(this.renderer, this.scene, this.quality);
+    this.lighting = new StudioLighting(this.renderer, this.scene);
     this.scene.add(this.lighting.group);
 
     this.resize();
@@ -65,22 +61,20 @@ export class SceneManager {
 
     this.camera.aspect = w / h;
 
-    // Auto-adjust camera distance so case fits comfortably on portrait mobile screens
-    const isPortrait = w < h;
-    const targetDistance = isPortrait ? 40 * Math.max(1, 0.75 / (w / h)) : 36;
-    this.camera.position.z = Math.min(55, Math.max(34, targetDistance));
-
     this.camera.updateProjectionMatrix();
   }
 
+  /** Fit the open silhouette to the actual stage, leaving the controls unobstructed. */
+  fitPackage(open: number, delta: number) {
+    const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const halfWidth = THREE.MathUtils.lerp(5.8, 10.7, open);
+    const distance = Math.max(9.6 / tan, halfWidth / (tan * this.camera.aspect)) + 4;
+    this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, distance,
+      prefersReducedMotion() ? 1 : 1 - Math.exp(-9 * delta));
+    this.camera.updateMatrixWorld();
+  }
+
   render() {
-    this.frameCount++;
-
-    // Optional shadow throttling for lower power devices
-    if (this.quality.shadowEveryNthFrame > 1) {
-      this.renderer.shadowMap.autoUpdate = this.frameCount % this.quality.shadowEveryNthFrame === 0;
-    }
-
     this.renderer.render(this.scene, this.camera);
   }
 }
