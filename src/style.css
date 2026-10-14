@@ -182,10 +182,16 @@ html, body {
   color: #ffffff;
 }
 
-.tool[aria-pressed='true'] .ico-lid {
-  transform-origin: 10.6px 4.5px;
-  transform: rotate(-35deg);
-  transition: transform 0.3s ease;
+#btn-open .ico-open {
+  display: none;
+}
+
+#btn-open[aria-pressed='true'] .ico-shut {
+  display: none;
+}
+
+#btn-open[aria-pressed='true'] .ico-open {
+  display: inline;
 }
 
 .dot {
