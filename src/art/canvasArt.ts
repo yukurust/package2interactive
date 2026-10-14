@@ -268,7 +268,7 @@ export class ArtworkManager {
       // Back category tag
       ctx.font = `600 ${Math.round(backW * 0.026)}px Inter, sans-serif`;
       ctx.fillStyle = preset.accentColor;
-      ctx.fillText('LUMEN WORKS PRESENTS', margin, margin + 14);
+      ctx.fillText('YUKURUST WORKS PRESENTS', margin, margin + 14, backW - margin * 2);
 
       // Back headline
       ctx.font = `700 ${Math.round(backW * 0.052)}px ${preset.fontTitle}, serif`;
@@ -507,14 +507,14 @@ export class ArtworkManager {
     ctx.fillStyle = '#a0a0a0';
     ctx.font = '600 24px -apple-system, BlinkMacSystemFont, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('LW-001', w / 2, h * 0.35);
+    ctx.fillText('YW-001', w / 2, h * 0.35);
 
     ctx.font = '500 16px -apple-system, BlinkMacSystemFont, sans-serif';
-    ctx.fillText('MODEL NO. LW-001   LUMEN WORKS', w / 2, h * 0.55);
+    ctx.fillText('MODEL NO. YW-001   YUKURUST WORKS', w / 2, h * 0.55);
 
     // Fictional publisher and mold cavity marks
     ctx.font = '700 28px sans-serif';
-    ctx.fillText('LW', w * 0.28, h * 0.78);
+    ctx.fillText('YW', w * 0.28, h * 0.78);
     ctx.fillText('01', w * 0.72, h * 0.78);
 
     this.backDetailTexture.needsUpdate = true;

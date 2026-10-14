@@ -79,8 +79,13 @@ html, body {
 }
 
 .brand-mark {
-  color: var(--accent);
-  font-size: 14px;
+  display: block;
+  height: 34px;
+  width: auto;
+  aspect-ratio: 497 / 400;
+  border-radius: 7px;
+  overflow: hidden;
+  flex: none;
 }
 
 .tag {
