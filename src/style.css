@@ -71,7 +71,7 @@ html, body {
 
 .brand {
   /* Capitals sit a little under the mark. The divisor keeps the lockup clear of the edition label. */
-  --mark-size: clamp(16px, calc((100vw - 200px) / 10.07), 34px);
+  --mark-size: clamp(16px, calc((100vw - 200px) / 10.07), 28px);
   color: var(--ink);
   font-size: calc(var(--mark-size) / 0.7046 * 0.88);
   font-weight: 700;
