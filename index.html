@@ -34,10 +34,16 @@
 
       <nav class="dock" id="dock" aria-label="Package controls">
         <button class="tool" id="btn-open" type="button" aria-pressed="false" title="Open / Close (O)" aria-label="Open the case">
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
-            <path class="ico-lid" d="M10.6 4.5 4 6.6v11.6l6.6 1.3z" />
-            <rect x="10.6" y="4.5" width="9" height="15" rx="1.4" />
-            <rect x="14.2" y="13.2" width="3.4" height="4.4" rx=".6" />
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
+            <g class="ico-shut">
+              <rect x="6.4" y="3.7" width="11.2" height="16.6" rx="1.6" />
+              <path d="M9.35 3.7v16.6" stroke-linecap="butt" />
+            </g>
+            <g class="ico-open">
+              <rect x="2.2" y="3.7" width="19.6" height="16.6" rx="1.6" />
+              <path d="M12 3.7v16.6" stroke-linecap="butt" />
+              <rect x="14.9" y="12.3" width="4" height="5.2" rx="0.55" />
+            </g>
           </svg>
         </button>
         <button class="tool" id="btn-reset" type="button" title="Reset view (R)" aria-label="Reset view">
